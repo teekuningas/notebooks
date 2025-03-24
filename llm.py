@@ -1,6 +1,8 @@
 import requests
 
-def generate_simple(model, instruction, data, seed=0, temperature=0.8, n_context=8192, output_format=None):
+def generate_simple(instruction, content, model="llama3.3:70b", seed=0, temperature=0.8, n_context=8192, output_format=None):
+    # model = "mistral-large"
+    # model = "deepseek-r1:70b"
     messages = [
         {
             "role": "system",
@@ -8,13 +10,15 @@ def generate_simple(model, instruction, data, seed=0, temperature=0.8, n_context
         },
         {
             "role": "user",
-            "content": data
+            "content": content
         }
     
     ]
-    return generate(model, messages, seed, temperature, n_context, output_format)
+    return generate(messages, model=model, seed=seed, temperature=temperature, n_context=n_context, output_format=output_format)
 
-def generate(model, messages, seed=0, temperature=0.8, n_context=8192, output_format=None):
+def generate(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_context=8192, output_format=None):
+    # model = "mistral-large"
+    # model = "deepseek-r1:70b"
     api_url = "https://jyu2401-62.tail5b278e.ts.net/ollamapi/api/chat"
     headers = {
         "Content-Type": "application/json"
