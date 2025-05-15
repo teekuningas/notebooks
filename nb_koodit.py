@@ -277,7 +277,7 @@ update_plot(default_threshold)
 threshold = 0.25
 
 # Discard clusters with less than {min_size} elements.
-min_size = 2
+min_size = 5
 
 # Compute the clusters with the selected threshold
 distance_matrix = pdist(vectors, metric='cosine')
