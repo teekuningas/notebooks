@@ -221,9 +221,8 @@ else:
 
 # %%
 # 1) Configure codes and iterations
-codes = ['Luonto', 'Rauha', 'Sää', 'Kylmyys', 'ympäristö',
-         'Melu', 'Liikenne', 'Aurinko', 'Luistelu', 'tuli', 'Metsä']
-n_iter = 2
+codes = ['Luonto', 'Rauha', 'Hiljaisuus', 'Äänet', 'Kaupunki', 'Kauneus', 'Yhteys', 'Linnut', 'rauha', 'Inspiratio', 'Kontrasti', 'vapaus']
+n_iter = 5
 
 output_format = {
     "type": "object",
