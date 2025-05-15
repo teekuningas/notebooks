@@ -30,6 +30,8 @@ import geopandas as gpd
 from shapely.geometry import Point # Though not directly used in plotting, good for consistency if adapting more
 import requests
 from io import StringIO
+import json
+from llm import generate_simple
 
 # %% [markdown]
 # ## Load Interview Data
@@ -178,17 +180,65 @@ else:
     print("Skipping map plot as metadata is not available.")
 
 # %% [markdown]
-# ## Next Steps
-#
-# With both interview texts and metadata loaded, we can proceed to:
-# 1. Preprocess the text data (e.g., feature extraction, sentiment analysis, topic modeling).
-# 2. Merge or align text-derived features with the metadata based on `interview_id`.
-# 3. Perform statistical correlational analyses.
-# 4. Visualize findings.
+# ## Code‐Presence Tabulation
 
 # %%
-# Placeholder for future analysis
-print("\nSetup complete. Ready for correlational analysis.")
+# 1) Configure codes and iterations
+codes = ['Luonto', 'Rauha', 'Sää', 'Kylmyys', 'ympäristö',
+         'Melu', 'Liikenne', 'Aurinko', 'Luistelu', 'tuli', 'Metsä']
+n_iter = 2
+
+output_format = {
+    "type": "object",
+    "properties": {
+        "code_present": {"type": "boolean"}
+    },
+    "required": ["code_present"]
+}
+
+# 2) Gather LLM decisions
+results = []
+for fname, text in interview_contents:
+    for code in codes:
+        for idx in range(n_iter):
+            instruction = """
+            Olet laadullisen tutkimuksen avustaja. Saat tekstinäytteen sekä aineiston pohjalta rakennetun koodikirjan yksittäisen koodin. Lue teksti huolella ja päätä kuvaako koodi tekstinäytettä.
+            """
+            content = f"Koodi: {code} \n\n Tekstinäyte: \n\n {text}"
+            res = generate_simple(instruction, content, seed=idx, output_format=output_format)
+            present = json.loads(res['message']['content'])['code_present']
+            results.append({
+                "fname": fname,
+                "code": code,
+                "iter": idx,
+                "result": present
+            })
+
+# 3) Pivot into percentage table
+import pandas as pd
+
+# build nested dict: fname → code → [bools]
+td = {}
+for r in results:
+    td.setdefault(r['fname'], {}).setdefault(r['code'], []).append(r['result'])
+
+# compute percentage of True
+for fn in td:
+    for c in td[fn]:
+        trues = td[fn][c].count(True)
+        td[fn][c] = (trues / len(td[fn][c])) * 100
+
+df_codes = pd.DataFrame.from_dict(td, orient='index')
+df_codes['total'] = df_codes.mean(axis=1)
+df_codes.loc['total'] = df_codes.mean()
+df_codes = df_codes.round(2)
+
+# 4) Style and display
+def color_high(val):
+    return 'background-color: rgba(144,238,144,0.3)' if val >= 80 else ''
+
+styled_codes = df_codes.style.map(color_high).format("{:.2f}")
+styled_codes
 
 
 # %%
