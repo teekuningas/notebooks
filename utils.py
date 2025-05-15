@@ -10,7 +10,8 @@ def read_files(folder, prefix):
         path = os.path.join(folder, fname)
         with open(path, 'r') as f:
             contents.append((fname, "".join(f.readlines())))
-    return contents
+    sorted_contents = sorted(contents, key=lambda f: re.search(r'\d+', f[0]).group().zfill(3))
+    return sorted_contents
 
 
 def strip_webvtt_to_plain_text(webvtt_string):

@@ -28,7 +28,7 @@ from utils import read_files
 from utils import strip_webvtt_to_plain_text
 
 # Start by reading the texts of interest from the file system
-contents = read_files(folder="data/linnut-03", prefix="inputfile")
+contents = read_files(folder="data/luontokokemus_simulaatio", prefix="interview")
 # contents = read_files(folder="data/linnut", prefix="nayte")
 
 # Remove timestamps if present
@@ -133,7 +133,7 @@ for fname, subresults in codelists:
         print(f"Iteraatio {idx+1}\n")
         pprint(codelist)
         print("")
-    
+
 
 # %%
 import numpy as np
