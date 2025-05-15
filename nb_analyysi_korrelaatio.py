@@ -276,5 +276,63 @@ def color_high(val):
 styled_codes = df_codes.style.map(color_high).format("{:.2f}")
 styled_codes
 
+# %% [markdown]
+# ## T-Test of Code Frequencies by Location Type
+
+# %%
+from scipy.stats import ttest_ind
+
+# 1) Merge code-percentages with metadata on interview_id
+#    (assumes df_codes.index matches metadata_df['interview_id'])
+merged = (
+    df_codes
+      .reset_index()
+      .rename(columns={'index':'interview_id'})
+      .merge(
+          metadata_df[['interview_id','location_type_generated']],
+          on='interview_id',
+          how='inner'
+      )
+)
+
+# 2) Split into Urban vs. Rural
+urban = merged[merged.location_type_generated == 'urban']
+rural = merged[merged.location_type_generated == 'rural']
+
+# 3) Run Welch’s t-test for each code (exclude the 'total' column)
+ttest_results = []
+for code in df_codes.columns.drop('total'):
+    u_vals = urban[code].dropna()
+    r_vals = rural[code].dropna()
+    if len(u_vals) >= 2 and len(r_vals) >= 2:
+        tstat, pval = ttest_ind(u_vals, r_vals, equal_var=False)
+    else:
+        tstat, pval = float('nan'), float('nan')
+    ttest_results.append({
+        'code': code,
+        'mean_urban': u_vals.mean(),
+        'mean_rural': r_vals.mean(),
+        't_stat': tstat,
+        'p_value': pval
+    })
+
+import pandas as pd
+tt_df = pd.DataFrame(ttest_results).set_index('code').round(3)
+
+# 4) Style and display
+def highlight_sig(val):
+    return 'background-color: rgba(144,238,144,0.3)' if val < 0.05 else ''
+
+styled_ttest = (
+    tt_df.style
+        .format({
+            'mean_urban':'{:.1f}',
+            'mean_rural':'{:.1f}',
+            't_stat':'{:.2f}',
+            'p_value':'{:.3f}'
+        })
+        .applymap(highlight_sig, subset=['p_value'])
+)
+styled_ttest
 
 # %%
