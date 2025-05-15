@@ -282,6 +282,8 @@ styled_codes
 # %%
 from scipy.stats import ttest_ind
 
+print(df_codes)
+
 # 1) Merge code-percentages with metadata on interview_id
 #    (assumes df_codes.index matches metadata_df['interview_id'])
 merged = (
