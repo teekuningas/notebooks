@@ -83,6 +83,43 @@ except FileNotFoundError:
     metadata_df = pd.DataFrame() # Create an empty DataFrame if file not found
 
 # %% [markdown]
+# ## Metadata Table
+
+# %%
+# Pick the most informative columns for a quick overview
+meta_cols = [
+    'interview_id',
+    'city_context',
+    'distance_to_closest_city_km',
+    'location_type_generated',
+    'themes_used_for_generation'
+]
+meta_display = metadata_df[meta_cols].copy()
+
+# Define a simple highlighter for urban vs. rural
+def highlight_location(val):
+    if val == 'urban':
+        return 'background-color: rgba(255,182,193,0.3)'  # light pink
+    elif val == 'rural':
+        return 'background-color: rgba(144,238,144,0.3)'  # light green
+    return ''
+
+# Build the styled metadata table
+styled_metadata = (
+    meta_display
+      .style
+      .applymap(highlight_location, subset=['location_type_generated'])
+      .format({
+          'distance_to_closest_city_km': '{:.1f}',
+          'themes_used_for_generation': lambda x: x  # leave as-is
+      })
+      .set_properties(**{'text-align': 'left'})
+)
+
+# Display it
+styled_metadata
+
+# %% [markdown]
 # ## Visualize Interview Locations on a Map
 
 # %%
