@@ -282,69 +282,64 @@ styled_codes
 # %%
 from scipy.stats import ttest_ind
 
-print(df_codes)
+# — Step 1: drop the 'total' summary row and reset index
+df_codes_clean = df_codes.drop(index='total', errors='ignore') \
+                         .reset_index() \
+                         .rename(columns={'index':'fname'})
 
-# 1) Merge code-percentages with metadata on interview_id
-#    (assumes df_codes.index matches metadata_df['interview_id'])
-merged = (
-    df_codes
-      .reset_index()                    # turn the index into a column
-      .rename(columns={'index':'fname'})
-      .assign(
-          # pull the digits out of e.g. "interview23.txt", convert to int,
-          # subtract 1 (because interview1.txt → sim_0000), then format
-          interview_id=lambda df: (
-              df['fname']
-                .str.extract(r'(\d+)', expand=False)    # get "23"
-                .astype(int)                            # to 23
-                .sub(1)                                 # to 22
-                .apply(lambda x: f"sim_{x:04d}")        # to "sim_0022"
-          )
-      )
-      .merge(
-          metadata_df[['interview_id', 'location_type_generated']],
-          on='interview_id',
-          how='inner'
-      )
+# — Step 2: extract numeric part, shift by 1, format to sim_####…
+df_codes_clean['number'] = (
+    df_codes_clean['fname']
+      .str.extract(r'(\d+)', expand=False)    # e.g. "23"
+      .astype(int)                            # → 23
+)
+df_codes_clean['interview_id'] = (
+    df_codes_clean['number']
+      .sub(1)                                 # 23 → 22
+      .apply(lambda x: f"sim_{x:04d}")        # → "sim_0022"
 )
 
-# 2) Split into Urban vs. Rural
-urban = merged[merged.location_type_generated == 'urban']
-rural = merged[merged.location_type_generated == 'rural']
+# — Step 3: merge with metadata on interview_id
+merged = pd.merge(
+    df_codes_clean,
+    metadata_df[['interview_id','location_type_generated']],
+    on='interview_id',
+    how='inner'
+)
 
-# 3) Run Welch’s t-test for each code (exclude the 'total' column)
+# — Split by location
+urban = merged[merged['location_type_generated']=='urban']
+rural = merged[merged['location_type_generated']=='rural']
+
+# — Step 4: run Welch’s t-test per code
 ttest_results = []
 for code in df_codes.columns.drop('total'):
-    u_vals = urban[code].dropna()
-    r_vals = rural[code].dropna()
-    if len(u_vals) >= 2 and len(r_vals) >= 2:
-        tstat, pval = ttest_ind(u_vals, r_vals, equal_var=False)
+    u = urban[code].dropna()
+    r = rural[code].dropna()
+    if len(u)>=2 and len(r)>=2:
+        tstat, pval = ttest_ind(u, r, equal_var=False)
     else:
         tstat, pval = float('nan'), float('nan')
     ttest_results.append({
-        'code': code,
-        'mean_urban': u_vals.mean(),
-        'mean_rural': r_vals.mean(),
-        't_stat': tstat,
-        'p_value': pval
+        'code':       code,
+        'mean_urban': u.mean(),
+        'mean_rural': r.mean(),
+        't_stat':     tstat,
+        'p_value':    pval
     })
 
-import pandas as pd
 tt_df = pd.DataFrame(ttest_results).set_index('code').round(3)
 
-# 4) Style and display
-def highlight_sig(val):
-    return 'background-color: rgba(144,238,144,0.3)' if val < 0.05 else ''
-
+# — Step 5: style and display
 styled_ttest = (
     tt_df.style
-        .format({
-            'mean_urban':'{:.1f}',
-            'mean_rural':'{:.1f}',
-            't_stat':'{:.2f}',
-            'p_value':'{:.3f}'
-        })
-        .applymap(highlight_sig, subset=['p_value'])
+         .format({
+             'mean_urban':'{:.1f}',
+             'mean_rural':'{:.1f}',
+             't_stat':'{:.2f}',
+             'p_value':'{:.3f}'
+          })
+         .applymap(highlight_sig, subset=['p_value'])
 )
 styled_ttest
 
