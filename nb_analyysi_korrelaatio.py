@@ -286,10 +286,21 @@ from scipy.stats import ttest_ind
 #    (assumes df_codes.index matches metadata_df['interview_id'])
 merged = (
     df_codes
-      .reset_index()
-      .rename(columns={'index':'interview_id'})
+      .reset_index()                    # turn the index into a column
+      .rename(columns={'index':'fname'})
+      .assign(
+          # pull the digits out of e.g. "interview23.txt", convert to int,
+          # subtract 1 (because interview1.txt → sim_0000), then format
+          interview_id=lambda df: (
+              df['fname']
+                .str.extract(r'(\d+)', expand=False)    # get "23"
+                .astype(int)                            # to 23
+                .sub(1)                                 # to 22
+                .apply(lambda x: f"sim_{x:04d}")        # to "sim_0022"
+          )
+      )
       .merge(
-          metadata_df[['interview_id','location_type_generated']],
+          metadata_df[['interview_id', 'location_type_generated']],
           on='interview_id',
           how='inner'
       )
