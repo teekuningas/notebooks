@@ -220,9 +220,9 @@ else:
 # ## Code‐Presence Tabulation
 
 # %%
-# 1) Configure codes and iterations
+# Configure codes and iterations
 codes = ['Luonto', 'Rauha', 'Hiljaisuus', 'Äänet', 'Kaupunki', 'Kauneus', 'Yhteys', 'Linnut', 'rauha', 'Inspiratio', 'Kontrasti', 'vapaus']
-n_iter = 5
+n_iter = 10
 
 output_format = {
     "type": "object",
@@ -232,7 +232,7 @@ output_format = {
     "required": ["code_present"]
 }
 
-# 2) Gather LLM decisions
+# Gather LLM decisions
 results = []
 for fname, text in interview_contents:
     for code in codes:
@@ -250,7 +250,8 @@ for fname, text in interview_contents:
                 "result": present
             })
 
-# 3) Pivot into percentage table
+
+# %%
 import pandas as pd
 
 # build nested dict: fname → code → [bools]
@@ -271,7 +272,7 @@ df_codes = df_codes.round(2)
 
 # 4) Style and display
 def color_high(val):
-    return 'background-color: rgba(144,238,144,0.3)' if val >= 80 else ''
+    return 'background-color: rgba(144,238,144,0.3)' if val >= 60 else ''
 
 styled_codes = df_codes.style.map(color_high).format("{:.2f}")
 styled_codes
@@ -333,10 +334,10 @@ tt_df = pd.DataFrame(ttest_results).set_index('code').round(3)
 # --- add this before you call .applymap(highlight_sig, …) ---
 def highlight_sig(val):
     """
-    Highlight p‐values below 0.05 in light red.
+    Highlight p‐values below 0.05 in light green.
     """
     try:
-        return 'background-color: rgba(255,182,193,0.3)' if float(val) < 0.05 else ''
+        return 'background-color: rgba(100,255,100,0.3)' if float(val) < 0.05 else ''
     except:
         return ''
 
