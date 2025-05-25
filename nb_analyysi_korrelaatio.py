@@ -330,6 +330,16 @@ for code in df_codes.columns.drop('total'):
 
 tt_df = pd.DataFrame(ttest_results).set_index('code').round(3)
 
+# --- add this before you call .applymap(highlight_sig, …) ---
+def highlight_sig(val):
+    """
+    Highlight p‐values below 0.05 in light red.
+    """
+    try:
+        return 'background-color: rgba(255,182,193,0.3)' if float(val) < 0.05 else ''
+    except:
+        return ''
+
 # — Step 5: style and display
 styled_ttest = (
     tt_df.style
