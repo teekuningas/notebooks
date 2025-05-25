@@ -27,7 +27,7 @@ import os
 from utils import read_files, strip_webvtt_to_plain_text
 import matplotlib.pyplot as plt
 import geopandas as gpd
-from shapely.geometry import Point # Though not directly used in plotting, good for consistency if adapting more
+from shapely.geometry import Point
 import requests
 from io import StringIO
 import json
