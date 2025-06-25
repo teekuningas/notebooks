@@ -222,7 +222,10 @@ else:
 # %%
 # Configure codes and iterations
 codes = ['Luonto', 'Rauha', 'Hiljaisuus', 'Äänet', 'Kaupunki', 'Kauneus', 'Yhteys', 'Linnut', 'rauha', 'Inspiratio', 'Kontrasti', 'vapaus']
-n_iter = 10
+n_iter = 5
+# model = "gemma3:27b"
+# model = "llama3.3:70b"
+model = "mistral-small:24b"
 
 output_format = {
     "type": "object",
@@ -234,14 +237,15 @@ output_format = {
 
 # Gather LLM decisions
 results = []
-for fname, text in interview_contents:
+for idx, (fname, text) in enumerate(interview_contents):
+    print(f"Interview {idx+1}")
     for code in codes:
         for idx in range(n_iter):
             instruction = """
             Olet laadullisen tutkimuksen avustaja. Saat tekstinäytteen sekä aineiston pohjalta rakennetun koodikirjan yksittäisen koodin. Lue teksti huolella ja päätä kuvaako koodi tekstinäytettä.
             """
             content = f"Koodi: {code} \n\n Tekstinäyte: \n\n {text}"
-            res = generate_simple(instruction, content, seed=idx, output_format=output_format)
+            res = generate_simple(instruction, content, seed=idx, model=model, output_format=output_format)
             present = json.loads(res['message']['content'])['code_present']
             results.append({
                 "fname": fname,
