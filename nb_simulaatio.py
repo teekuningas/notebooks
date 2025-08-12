@@ -25,7 +25,7 @@ from io import StringIO
 from llm import generate_simple
 
 # Number of interviews to simulate
-N_INTERVIEWS = 30
+N_INTERVIEWS = 50
 
 # City data
 CITIES = [

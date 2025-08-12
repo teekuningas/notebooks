@@ -338,10 +338,10 @@ tt_df = pd.DataFrame(ttest_results).set_index('code').round(3)
 # --- add this before you call .applymap(highlight_sig, …) ---
 def highlight_sig(val):
     """
-    Highlight p‐values below 0.05 in light green.
+    Highlight p‐values below 0.01 in light green.
     """
     try:
-        return 'background-color: rgba(100,255,100,0.3)' if float(val) < 0.05 else ''
+        return 'background-color: rgba(100,255,100,0.3)' if float(val) < 0.01 else ''
     except:
         return ''
 

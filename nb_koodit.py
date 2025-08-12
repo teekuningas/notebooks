@@ -77,7 +77,7 @@ output_format = {
 }
 
 # For every text, generate {n_iter} codebooks. 
-n_iter = 2
+n_iter = 1
 
 codelists = []
 for fname, text in contents:
@@ -277,7 +277,7 @@ update_plot(default_threshold)
 threshold = 0.25
 
 # Discard clusters with less than {min_size} elements.
-min_size = 5
+min_size = 3
 
 # Compute the clusters with the selected threshold
 distance_matrix = pdist(vectors, metric='cosine')
