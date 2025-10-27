@@ -221,7 +221,7 @@ Teemat, joita tulee käsitellä implisiittisesti: {', '.join(themes_for_intervie
             model=GENERATION_MODEL,
             seed=i # Use loop index for reproducibility if needed, but vary for diverse outputs
         )
-        interview_text = result['message']['content']
+        interview_text = result
     except Exception as e:
         print(f"Error generating interview {i}: {e}")
         interview_text = f"ERROR: Could not generate text (Themes: {', '.join(themes_for_interview)})"

@@ -65,7 +65,7 @@ for fname, text in contents:
     result = generate_simple(instruction, content, seed=10)
 
     # Extract the result
-    answer = result['message']['content']
+    answer = result
             
     # Store it
     results.append({
@@ -103,7 +103,7 @@ print(content)
 result = generate_simple(instruction, content, seed=10)
 
 # Extract the result
-answer = result['message']['content']
+answer = result
 
 print("Vastaukseksi tekoälyltä tulee:\n\n")
 print(answer)

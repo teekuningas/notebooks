@@ -73,7 +73,7 @@ for fname, text in contents:
             result = generate_simple(instruction, content, seed=idx, output_format=output_format)
 
             # Extract the result
-            code_present = json.loads(result['message']['content'])['code_present']
+            code_present = json.loads(result)['code_present']
             
             # Store it
             results.append({

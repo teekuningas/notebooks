@@ -246,7 +246,7 @@ for idx, (fname, text) in enumerate(interview_contents):
             """
             content = f"Koodi: {code} \n\n Tekstinäyte: \n\n {text}"
             res = generate_simple(instruction, content, seed=idx, model=model, output_format=output_format)
-            present = json.loads(res['message']['content'])['code_present']
+            present = json.loads(res)['code_present']
             results.append({
                 "fname": fname,
                 "code": code,

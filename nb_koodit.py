@@ -107,7 +107,7 @@ for fname, text in contents:
         result = generate_simple(instruction, text, seed=idx)
 
         # Extract the result
-        content = result['message']['content']
+        content = result
 
         # Define the instruction for the formatting task: 
         instruction = """
@@ -118,7 +118,7 @@ for fname, text in contents:
         result = generate_simple(instruction, content, seed=10, output_format=output_format)
 
         # Extract the machine-readable result.
-        codes = json.loads(result['message']['content'])['codes']
+        codes = json.loads(result)['codes']
         
         # Store the single result.
         subresults.append(codes)
@@ -334,7 +334,7 @@ for idx, cluster in enumerate(code_clusters):
     result = generate_simple(instruction, data, seed=10, n_context=1024, output_format=output_format)
 
     # Extract the code
-    code = json.loads(result['message']['content'])
+    code = json.loads(result)
 
     # And store it
     final_codes.append(code)

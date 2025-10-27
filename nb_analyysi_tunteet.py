@@ -75,7 +75,7 @@ for fname, text in contents:
             result = generate_simple(instruction, content, seed=idx, output_format=output_format)
 
             # Extract the result
-            present = json.loads(result['message']['content'])['emotion_present']
+            present = json.loads(result)['emotion_present']
 
             # Store it
             results.append({
