@@ -34,6 +34,9 @@ contents = read_files(folder="data/luontokokemus_simulaatio", prefix="interview"
 # Remove timestamps if present
 contents = [(fname, strip_webvtt_to_plain_text(text)) for fname, text in contents]
 
+# take 5
+contents = contents[:20]
+
 # Print to check that texts are correctly read
 for fname, text in contents:
     print(f"{fname}:\n\n")
@@ -77,7 +80,7 @@ output_format = {
 }
 
 # For every text, generate {n_iter} codebooks. 
-n_iter = 1
+n_iter = 2
 
 codelists = []
 for fname, text in contents:
@@ -104,7 +107,7 @@ for fname, text in contents:
         # """   
         
         # Generate the intermediate result using the text, the instruction and a unique seed (to get a different result each time):
-        result = generate_simple(instruction, text, seed=idx)
+        result = generate_simple(instruction, text, seed=idx, provider="llamacpp")
 
         # Extract the result
         content = result
@@ -115,7 +118,7 @@ for fname, text in contents:
         """
 
         # Generate the machine-readable result:
-        result = generate_simple(instruction, content, seed=10, output_format=output_format)
+        result = generate_simple(instruction, content, seed=10, output_format=output_format, provider="llamacpp")
 
         # Extract the machine-readable result.
         codes = json.loads(result)['codes']
@@ -170,7 +173,7 @@ from scipy.spatial.distance import pdist
 import ipywidgets as widgets
 from IPython.display import display
 
-# Then the clustering. The following code creates a visualization of the clustering as a tree and creates a user-controlled slider to change the cut-off threshold.
+# Then the clustering. The folllab/tree/notebooks/nb_analyysi_koodit.ipynbowing code creates a visualization of the clustering as a tree and creates a user-controlled slider to change the cut-off threshold.
 # The resulting clusters are written below the plots. Here, one can experiment with different thresholds. The threshold is then set in the next step.
 
 # Helper function to calculate within-cluster sum of squares (WCSS) for a range of thresholds
@@ -331,7 +334,7 @@ for idx, cluster in enumerate(code_clusters):
     data = ", ".join(cluster)
 
     # Send the request to llm.
-    result = generate_simple(instruction, data, seed=10, n_context=1024, output_format=output_format)
+    result = generate_simple(instruction, data, seed=10, output_format=output_format, provider="llamacpp")
 
     # Extract the code
     code = json.loads(result)

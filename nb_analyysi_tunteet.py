@@ -72,7 +72,7 @@ for fname, text in contents:
             content = f"Tunne: {emotion} \n\n Tekstinäyte: \n\n {text}"
 
             # Generate the answer
-            result = generate_simple(instruction, content, seed=idx, output_format=output_format)
+            result = generate_simple(instruction, content, seed=idx, output_format=output_format, provider="llamacpp")
 
             # Extract the result
             present = json.loads(result)['emotion_present']

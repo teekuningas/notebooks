@@ -218,8 +218,8 @@ Teemat, joita tulee käsitellä implisiittisesti: {', '.join(themes_for_intervie
         result = generate_simple(
             instruction,
             content,
-            model=GENERATION_MODEL,
-            seed=i # Use loop index for reproducibility if needed, but vary for diverse outputs
+            seed=i, # Use loop index for reproducibility if needed, but vary for diverse outputs
+            provider="llamacpp"
         )
         interview_text = result
     except Exception as e:

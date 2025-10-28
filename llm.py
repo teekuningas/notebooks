@@ -1,7 +1,7 @@
 import requests
 import json
 
-def generate_simple(instruction, content, model="llama3.3:70b", seed=0, temperature=0.8, n_context=8192, output_format=None):
+def generate_simple(instruction, content, model=None, seed=0, temperature=0.8, n_context=None, output_format=None, provider="ollama"):
     # model = "mistral-large"
     # model = "deepseek-r1:70b"
     messages = [
@@ -13,12 +13,22 @@ def generate_simple(instruction, content, model="llama3.3:70b", seed=0, temperat
             "role": "user",
             "content": content
         }
-    
     ]
-    return generate(messages, model=model, seed=seed, temperature=temperature, n_context=n_context, output_format=output_format)
+    
+    if provider == "llamacpp":
+        if model is not None:
+            print("warning: llamacpp does not respect the model parameter")
+        return generate_llamacpp(messages, model=model, seed=seed, temperature=temperature, output_format=output_format)
+    elif provider == "ollama":
+        return generate_ollama(messages, model=model, seed=seed, temperature=temperature, n_context=n_context, output_format=output_format)
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
 
 
-def generate(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_context=8192, output_format=None):
+def generate_ollama(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_context=None, output_format=None):
+    if n_context is None:
+        n_context = 8192
+        
     # model = "mistral-large"
     # model = "deepseek-r1:70b"
     api_url = "https://jyu2401-62.tail5b278e.ts.net/ollamapi/api/chat"
@@ -45,7 +55,10 @@ def generate(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_context=
     else:
         response.raise_for_status()
 
-def embed(prompt, model="snowflake-arctic-embed2", seed=0):
+def embed(prompt, model="snowflake-arctic-embed2", seed=0, provider="ollama"):
+    if provider == "llamacpp":
+        raise ValueError("llamacpp is not supported for embed provider")
+        
     # model = "bge-m3"
     # model = "paraphrase-multilingual"
     # model = "mxbai-embed-large"
@@ -95,7 +108,7 @@ def generate_llamacpp(messages, model="gpt-3.5-turbo", seed=0, temperature=0.8, 
                     }
                 }
             ]
-            data['tool_choice'] = {"type": "function", "function": {"name": "structured_output"}}
+            data['tool_choice'] = "required"
             use_tools = True
         elif output_format == 'json':
             data['response_format'] = {"type": "json_object"}

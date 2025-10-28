@@ -62,7 +62,7 @@ for fname, text in contents:
     content = f"Tekstinäyte: {text} \n\n Kysymys: \n\n {question}"
 
     # Generate the answer
-    result = generate_simple(instruction, content, seed=10)
+    result = generate_simple(instruction, content, seed=10, provider="llamacpp")
 
     # Extract the result
     answer = result
@@ -100,7 +100,7 @@ print("Syötteenä tekoälylle menee:\n\n")
 print(content)
 
 # Generate the answer
-result = generate_simple(instruction, content, seed=10)
+result = generate_simple(instruction, content, seed=10, provider="llamacpp")
 
 # Extract the result
 answer = result

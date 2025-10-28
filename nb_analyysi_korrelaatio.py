@@ -245,7 +245,7 @@ for idx, (fname, text) in enumerate(interview_contents):
             Olet laadullisen tutkimuksen avustaja. Saat tekstinäytteen sekä aineiston pohjalta rakennetun koodikirjan yksittäisen koodin. Lue teksti huolella ja päätä kuvaako koodi tekstinäytettä.
             """
             content = f"Koodi: {code} \n\n Tekstinäyte: \n\n {text}"
-            res = generate_simple(instruction, content, seed=idx, model=model, output_format=output_format)
+            res = generate_simple(instruction, content, seed=idx, output_format=output_format, provider="llamacpp")
             present = json.loads(res)['code_present']
             results.append({
                 "fname": fname,
