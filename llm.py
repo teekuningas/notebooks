@@ -55,10 +55,20 @@ def generate_ollama(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_c
     else:
         response.raise_for_status()
 
-def embed(prompt, model="snowflake-arctic-embed2", seed=0, provider="ollama"):
+def embed(prompt, model=None, seed=0, provider="ollama"):
     if provider == "llamacpp":
-        raise ValueError("llamacpp is not supported for embed provider")
-        
+        if model is not None:
+             print("warning: llamacpp does not respect the model parameter")
+        return embed_llamacpp(prompt)
+    elif provider == "ollama":
+        if model is None:
+            model = "snowflake-arctic-embed2"
+        return embed_ollama(prompt, model=model, seed=seed)
+    else:
+        raise ValueError(f"Unknown provider for embed: {provider}")
+
+
+def embed_ollama(prompt, model="snowflake-arctic-embed2", seed=0):
     # model = "bge-m3"
     # model = "paraphrase-multilingual"
     # model = "mxbai-embed-large"
@@ -78,12 +88,29 @@ def embed(prompt, model="snowflake-arctic-embed2", seed=0, provider="ollama"):
     response = requests.post(api_url, headers=headers, json=data) 
     
     if response.status_code == 200:
-        return response.json()
+        return response.json()['embedding']
+    else:
+        response.raise_for_status()
+
+
+def embed_llamacpp(prompt):
+    api_url = "http://localhost:8081/v1/embeddings"
+    headers = {
+        "Content-Type": "application/json"
+    }
+    data = {
+        "input": prompt,
+    }
+    
+    response = requests.post(api_url, headers=headers, json=data) 
+    
+    if response.status_code == 200:
+        return response.json()['data'][0]['embedding']
     else:
         response.raise_for_status()
 
 def generate_llamacpp(messages, model="gpt-3.5-turbo", seed=0, temperature=0.8, output_format=None):
-    api_url = "https://jyu2401-62.tail5b278e.ts.net/llama-cpp/v1/chat/completions"
+    api_url = "http://localhost:8080/v1/chat/completions"
     headers = {
         "Content-Type": "application/json"
     }

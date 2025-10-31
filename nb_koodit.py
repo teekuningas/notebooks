@@ -25,17 +25,25 @@
 
 # %%
 from utils import read_files
+from utils import read_interview_data
 from utils import strip_webvtt_to_plain_text
 
 # Start by reading the texts of interest from the file system
-contents = read_files(folder="data/luontokokemus_simulaatio", prefix="interview")
+# contents = read_files(folder="data/luontokokemus_simulaatio", prefix="interview")
 # contents = read_files(folder="data/linnut", prefix="nayte")
+contents = read_interview_data("data/birdinterview", "observation")
 
 # Remove timestamps if present
 contents = [(fname, strip_webvtt_to_plain_text(text)) for fname, text in contents]
 
-# take 5
-contents = contents[:20]
+# Filter out short and non-diverse texts
+filtered_contents = []
+for fname, text in contents:
+    stripped_text = text.strip()
+    words = stripped_text.split()
+    if len(words) >= 10 and len(set(words)) >= 10:
+        filtered_contents.append((fname, text))
+contents = filtered_contents
 
 # Print to check that texts are correctly read
 for fname, text in contents:
@@ -80,7 +88,7 @@ output_format = {
 }
 
 # For every text, generate {n_iter} codebooks. 
-n_iter = 2
+n_iter = 4
 
 codelists = []
 for fname, text in contents:
@@ -160,8 +168,8 @@ for name, textvalues in codelists:
 # Embed each code into the "semantic space".
 vectors = []
 for code in codes:
-    result = embed(code)
-    vectors.append(result['embedding'])
+    result = embed(code, provider="llamacpp")
+    vectors.append(result)
 
 print(f"{len(vectors)} codes embedded.")
 

@@ -15,17 +15,27 @@
 
 # %%
 from utils import read_files
+from utils import read_interview_data
 from utils import strip_webvtt_to_plain_text
 
 # Define the codes that are used
-codes = ['Luonto', 'Rauha', 'Sää', 'Kylmyys', 'ympäristö', 'Melu', 'Liikenne', 'Aurinko', 'Luistelu', 'tuli', 'Metsä']
-
+codes = ['luonto', 'metsä', 'Taustapalvelu']
 # And read the texts of interest from the file system
-contents = read_files(folder="data/linnut-03", prefix="inputfile")
-# contents = read_files(folder="data/linnut", prefix="nayte")
+#contents = read_files(folder="data/linnut-03", prefix="inputfile")
+#contents = read_files(folder="data/linnut", prefix="nayte")
+contents = read_interview_data("data/birdinterview", "observation")
 
 # Remove timestamps if present
 contents = [(fname, strip_webvtt_to_plain_text(text)) for fname, text in contents]
+
+# Filter out short and non-diverse texts
+filtered_contents = []
+for fname, text in contents:
+    stripped_text = text.strip()
+    words = stripped_text.split()
+    if len(words) >= 10 and len(set(words)) >= 10:
+        filtered_contents.append((fname, text))
+contents = filtered_contents
 
 # Print to check that texts are correctly read
 for fname, text in contents:
@@ -54,13 +64,14 @@ output_format = {
 }
 
 # For every text and code, generate {n_iter} decisions.
-n_iter = 2
+n_iter = 3
 
 results = []
 for fname, text in contents:
     for code in codes:
-        for idx in range(n_iter):
-
+        idx = 0
+        seed = 0
+        while idx < n_iter:
             # Define the instructions. 
             instruction = """
             Olet laadullisen tutkimuksen avustaja. Saat tekstinäytteen sekä aineiston pohjalta rakennetun koodikirjan yksittäisen koodin. Lue teksti huolella ja päätä kuvaako koodi tekstinäytettä.
@@ -72,7 +83,16 @@ for fname, text in contents:
             # Generate the answer
             result = generate_simple(instruction, content, seed=idx, output_format=output_format, provider="llamacpp")
 
+            if not result:
+                print("Trying again..")
+                print(f"Code was: {code}")
+                print(f"Text was: {text}")
+                print(f"Seed was: {seed}")
+                seed += 1
+                continue
+            
             # Extract the result
+            print(f"Result was: {result}")
             code_present = json.loads(result)['code_present']
             
             # Store it
@@ -82,6 +102,8 @@ for fname, text in contents:
                 "iter": idx,
                 "result": code_present
             })
+            idx += 1
+            seed += 1
 
 # %%
 import pandas as pd
@@ -123,7 +145,7 @@ df = df.round(2)
 
 # Define the styling function
 def color_high_values(val):
-    color = 'background-color: rgba(144, 238, 144, 0.3)' if val >= 80 else ''
+    color = 'background-color: rgba(144, 238, 144, 0.3)' if val >= 50 else ''
     return color
 
 # Apply the styling
