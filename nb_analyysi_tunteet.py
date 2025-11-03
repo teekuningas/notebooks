@@ -14,18 +14,17 @@
 # ---
 
 # %%
-from utils import read_files
-from utils import strip_webvtt_to_plain_text
+from utils import read_interview_data, filter_interview_simple
 
 # Define the emotions of interest
 emotions = ["ilo", "viha", "suru", "hämmästys", "pelko", "inho"]
 
 # And read the texts of interest from the file system
-contents = read_files(folder="data/linnut-03", prefix="inputfile")
-# contents = read_files(folder="data/linnut", prefix="nayte")
+contents = read_interview_data("data/birdinterview", "observation")
+contents = filter_interview_simple(contents)
 
-# Remove timestamps if present
-contents = [(fname, strip_webvtt_to_plain_text(text)) for fname, text in contents]
+# Convert to (filename, content) tuples for now
+contents = [(meta["filename"], text) for meta, text in contents]
 
 # Print to check that texts are correctly read
 for fname, text in contents:
@@ -111,17 +110,18 @@ for fname in transformed_data:
     for emotion in transformed_data[fname]:
         true_count = transformed_data[fname][emotion].count(True)
         total_count = len(transformed_data[fname][emotion])
-        transformed_data[fname][emotion] = (true_count / total_count) * 100
+        transformed_data[fname][emotion] = (true_count / total_count)
 
 # Create DataFrame
 df = pd.DataFrame.from_dict(transformed_data, orient='index')
 
-# Add averages
+# Save the DataFrame with values between 0 and 1
+df.to_csv("output/analyysi_tunteet.csv")
+
+# Add averages and format for visualization
 df['total'] = df.mean(axis=1)
 df.loc['total'] = df.mean()
-
-# Format percentages
-df = df.round(2)
+df = df.round(2) * 100
 
 # Define the styling function
 def color_high_values(val):

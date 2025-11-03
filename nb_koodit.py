@@ -13,41 +13,26 @@
 #     name: python3
 # ---
 
-# %% [markdown]
-# Mahdollisia tarkentavia tutkimuskysymyksiä koodikirjaa ajatellen:
-#
-# PAIKKA: miten ympäristöä ja luontoa kuvataan, mitä elementtejä mainitaan?  
-# TOIMIJAT: kenestä/mistä puhutaan (ihmiset, eläimet, ei-inhimilliset toimijat), miten vuorovaikutusta kuvataan (ollaanko yksin, seurassa)?  
-# AKTIVITEETIT/TOIMINTA: mitä luonnossa tehdään, miten siellä ollaan/liikutaan?  
-# TAPAHTUMAT: mistä kerrotaan, mitä havainnoinnin aikana on tapahtunut?  
-# MOTIIVIT JA TAVOITTEET: miksi luonnossa ollaan, mitä siellä halutaan tehdä ja saavuttaa?  
-# TUNTEET: miltä osallistujasta tuntuu ja miten hän puhuu omista tuntemuksistaan ja aistimuksistaan? 
-
 # %%
 from utils import read_files
 from utils import read_interview_data
 from utils import strip_webvtt_to_plain_text
 
+from utils import filter_interview_simple
+
 # Start by reading the texts of interest from the file system
 # contents = read_files(folder="data/luontokokemus_simulaatio", prefix="interview")
-# contents = read_files(folder="data/linnut", prefix="nayte")
 contents = read_interview_data("data/birdinterview", "observation")
 
-# Remove timestamps if present
-contents = [(fname, strip_webvtt_to_plain_text(text)) for fname, text in contents]
+# And filter to a sensible subset
+contents = filter_interview_simple(contents)
 
-# Filter out short and non-diverse texts
-filtered_contents = []
-for fname, text in contents:
-    stripped_text = text.strip()
-    words = stripped_text.split()
-    if len(words) >= 10 and len(set(words)) >= 10:
-        filtered_contents.append((fname, text))
-contents = filtered_contents
+# Convert to (rec_id, content) tuples for now
+contents = [(meta["rec_id"], text) for meta, text in contents][:3]
 
 # Print to check that texts are correctly read
-for fname, text in contents:
-    print(f"{fname}:\n\n")
+for rec_id, text in contents:
+    print(f"{rec_id}:\n\n")
     print(f"{text}\n\n")
 
 # %%
@@ -88,10 +73,11 @@ output_format = {
 }
 
 # For every text, generate {n_iter} codebooks. 
-n_iter = 4
+n_iter = 1
 
 codelists = []
-for fname, text in contents:
+for idx, (rec_id, text) in enumerate(contents):
+    print(f"Generating codebook {idx+1} for {rec_id}..")
     subresults = []
     for idx in range(n_iter):
 
@@ -107,16 +93,7 @@ for fname, text in contents:
         Koodien tulisi olla kuvaavia, yleiskielisiä substantiiveja. Vältä lyhenteitä.
 
         Vastaa suomeksi.
-        """
-        
-        # # An alternative for a more specific question:
-        # instruction = """
-        # Olet laadullisen tutkimuksen avustaja. Tarkoituksesi on etsiä seuraavasta tekstistä olennaisimmat käsitteet eli koodit, kuitenkin niin että ne liittyvät erityisesti seuraavaan tutkimuskysymykseen:
-        # 
-        # TAPAHTUMAT: mistä kerrotaan, mitä havainnoinnin aikana on tapahtunut?
-        # 
-        # Lue teksti huolella ja anna vastaukseksi koodit ja jokaiselle koodille jokin perustelu. Keskity tutkimuskysymykseen liittyviin koodeihin. Yritä valita vain tärkeimmät ja ytimekkäimmät koodit, suosi yksisanaisia koodeja. Vastaa suomeksi.
-        # """   
+        """ 
         
         # Generate the intermediate result using the text, the instruction and a unique seed (to get a different result each time):
         result = generate_simple(instruction, text, seed=idx, provider="llamacpp")
@@ -139,11 +116,11 @@ for fname, text in contents:
         subresults.append(codes)
 
     # Store the results of all iterations of a single text.
-    codelists.append((fname, subresults))
+    codelists.append((rec_id, subresults))
 
 # Now codelists variable includes {n_iter} codebooks for each of the texts. Print them to see.
-for fname, subresults in codelists:
-    print(f"{fname}:\n")
+for rec_id, subresults in codelists:
+    print(f"{rec_id}:\n")
     for idx, codelist in enumerate(subresults):
         print(f"Iteraatio {idx+1}\n")
         pprint(codelist)
@@ -285,10 +262,10 @@ display(widgets.VBox([
 # Here we actually apply the threshold and create the clusters.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.40
+threshold = 0.4
 
 # Discard clusters with less than {min_size} elements.
-min_size = 3
+min_size = 2
 
 # Compute the clusters with the selected threshold
 distance_matrix = pdist(vectors, metric='cosine')
@@ -352,12 +329,16 @@ for idx, cluster in enumerate(code_clusters):
     # And store it
     final_codes.append(code)
 
-# Print the final codebook.
-print("Final codes:")
+# Print the final codebook and save to file.
+output_str = "Final codes:\n"
 for idx, code in enumerate(final_codes):
-    print(f"{idx+1}: {code} ({', '.join(code_clusters[idx])})")
+    output_str += f"{idx+1}: {code} ({', '.join(code_clusters[idx])})\n"
+output_str += "\nIn a format for easy copying:\n"
+output_str += str(list(dict.fromkeys(reversed([codedict['code'] for codedict in final_codes]))))
 
-print("\nIn a format for easy copying:")
-print(list(dict.fromkeys(reversed([codedict['code'] for codedict in final_codes]))))
+print(output_str)
+
+with open("output/koodit.txt", "w") as f:
+    f.write(output_str)
 
 # %%

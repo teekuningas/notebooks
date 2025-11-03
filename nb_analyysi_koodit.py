@@ -18,24 +18,20 @@ from utils import read_files
 from utils import read_interview_data
 from utils import strip_webvtt_to_plain_text
 
+from utils import filter_interview_simple
+
 # Define the codes that are used
-codes = ['Luonto', 'Tyytyväisyys', 'Tervehdintä', 'Linnut', 'Metsä']
+codes = ['Luonnonkauneus', 'Luonto', 'Rauha', 'Havainto', 'Linnut', 'Rantaelämys']
+
 # And read the texts of interest from the file system
-#contents = read_files(folder="data/linnut-03", prefix="inputfile")
 #contents = read_files(folder="data/linnut", prefix="nayte")
 contents = read_interview_data("data/birdinterview", "observation")
 
-# Remove timestamps if present
-contents = [(fname, strip_webvtt_to_plain_text(text)) for fname, text in contents]
+# Filter to a sensible subset
+contents = filter_interview_simple(contents)
 
-# Filter out short and non-diverse texts
-filtered_contents = []
-for fname, text in contents:
-    stripped_text = text.strip()
-    words = stripped_text.split()
-    if len(words) >= 10 and len(set(words)) >= 10:
-        filtered_contents.append((fname, text))
-contents = filtered_contents
+# Convert to (filename, content) tuples for now
+contents = [(meta["rec_id"], text) for meta, text in contents][:3]
 
 # Print to check that texts are correctly read
 for fname, text in contents:
@@ -143,22 +139,23 @@ for item in results:
     
     transformed_data[fname][code].append(item['result'])
 
-# Calculate percentages of ("yes" / all) for each text and code.
+# Calculate true percentages for each text and code.
 for fname in transformed_data:
     for code in transformed_data[fname]:
         true_count = transformed_data[fname][code].count(True)
         total_count = len(transformed_data[fname][code])
-        transformed_data[fname][code] = (true_count / total_count) * 100
+        transformed_data[fname][code] = (true_count / total_count)
 
 # Create DataFrame
 df = pd.DataFrame.from_dict(transformed_data, orient='index')
 
-# Add averages
+# Save the DataFrame with values between 0 and 1
+df.to_csv("output/analyysi_koodit.csv")
+
+# Add averages and format for visualization
 df['total'] = df.mean(axis=1)
 df.loc['total'] = df.mean()
-
-# Format percentages
-df = df.round(2)
+df = df.round(2) * 100
 
 # Define the styling function
 def color_high_values(val):
