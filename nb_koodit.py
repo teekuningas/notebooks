@@ -100,9 +100,13 @@ for fname, text in contents:
 
         # Define the instruction for the first step:
         instruction = """
-        Olet laadullisen tutkimuksen avustaja. Tarkoituksesi on etsiä seuraavasta tekstistä olennaisimmat käsitteet eli koodit.
-        
-        Lue teksti huolella ja anna vastaukseksi koodit ja jokaiselle koodille jokin perustelu. Yritä valita vain tärkeimmät ja ytimekkäimmät koodit, suosi yksisanaisia koodeja. Vastaa suomeksi.
+        Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä keskeiset teemat ja käsitteet.
+
+        Muodosta näistä teemoista koodikirja. Jokaisella koodilla tulee olla perustelu.
+
+        Koodien tulisi olla kuvaavia, yleiskielisiä substantiiveja. Vältä lyhenteitä.
+
+        Vastaa suomeksi.
         """
         
         # # An alternative for a more specific question:
@@ -122,7 +126,7 @@ for fname, text in contents:
 
         # Define the instruction for the formatting task: 
         instruction = """
-        Olet laadullisen tutkimuksen avustaja. Ota alla oleva vapaamuotoisesti esitetty koodikirja ja muotoile se uudestaan pyydettyyn muotoon.
+        Muotoile annettu vapaamuotoinen koodikirja pyydettyyn JSON-muotoon.
         """
 
         # Generate the machine-readable result:
@@ -130,10 +134,10 @@ for fname, text in contents:
 
         # Extract the machine-readable result.
         codes = json.loads(result)['codes']
-        
+
         # Store the single result.
         subresults.append(codes)
-        
+
     # Store the results of all iterations of a single text.
     codelists.append((fname, subresults))
 
@@ -241,20 +245,18 @@ threshold_slider = widgets.FloatSlider(
 cluster_info = widgets.Label(value="Number of clusters: 0")
 cluster_contents = widgets.HTML(value="")
 
-# Create figure for the plots
-fig, axs = plt.subplots(2, 1, figsize=(15,10))
-ax1, ax2 = axs
-
+# Create the interactive plot
 # This is called everytime we change the slider
 def update_plot(threshold):
 
+    # Create figure for the plots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10))
+
     # First update the tree-plot
-    ax1.clear()
     dendrogram(Z, ax=ax1, no_labels=True)
     ax1.axhline(y=threshold, color='r', linestyle='--')
 
     # Then update the WCSS plot
-    ax2.clear()
     ax2.plot(thresholds, wcss_values, label='WCSS')
     ax2.axvline(x=threshold, color='r', linestyle='--')
     ax2.set_xlabel('Threshold')
@@ -268,8 +270,7 @@ def update_plot(threshold):
     
     # Ensure proper layout
     plt.tight_layout()
-    display(fig)
-    plt.close()
+    plt.show()
 
 # Finall, create and show interactive clustering widget.
 interactive_plot = widgets.interactive(update_plot, threshold=threshold_slider)
@@ -279,13 +280,12 @@ display(widgets.VBox([
     interactive_plot.children[-1],
     cluster_contents
 ]))
-update_plot(default_threshold)
 
 # %%
 # Here we actually apply the threshold and create the clusters.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.25
+threshold = 0.40
 
 # Discard clusters with less than {min_size} elements.
 min_size = 3
@@ -333,9 +333,11 @@ for idx, cluster in enumerate(code_clusters):
     # Define a instruction:
     
     instruction = """
-    Olet laadullisen tutkimuksen avustaja. Saat syötteenä klusteroinnin seurauksena syntyneen klusterin koodit. 
-    Tarkoituksesi on yhdistää annettu lista koodeja yhdeksi kuvaavaksi koodiksi kenties vain valitsemalla yksi tai sitten muuten yhdistämällä. 
-    Vastauksen pitäisi olla mahdollisimman yksinkertainen.
+    Olet laadullisen tutkimuksen avustaja.
+    Tehtäväsi on tiivistää lista samankaltaisia koodeja yhdeksi edustavaksi koodiksi.
+    Valitse olemassaolevista koodeista paras tai muodosta uusi, parempi koodi.
+    Koodin tulee olla ytimekäs, yleiskielinen suomenkielinen sana, mieluiten substantiivi.
+    Vältä vierasperäisiä sanoja, lyhenteitä ja monimutkaisia rakenteita.
     """
 
     # For data, we set a comma-separated list of cluster elements.

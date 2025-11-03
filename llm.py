@@ -122,21 +122,16 @@ def generate_llamacpp(messages, model="gpt-3.5-turbo", seed=0, temperature=0.8, 
         "stream": False,
     }
     
-    use_tools = False
     if output_format:
         if isinstance(output_format, dict):
-            data['tools'] = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "structured_output",
-                        "description": "Generate a structured output based on the provided schema.",
-                        "parameters": output_format
-                    }
+            data['response_format'] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_output",
+                    "strict": True,
+                    "schema": output_format
                 }
-            ]
-            data['tool_choice'] = "required"
-            use_tools = True
+            }
         elif output_format == 'json':
             data['response_format'] = {"type": "json_object"}
 
@@ -144,15 +139,6 @@ def generate_llamacpp(messages, model="gpt-3.5-turbo", seed=0, temperature=0.8, 
     
     if response.status_code == 200:
         response_json = response.json()
-        
-        # If tools were used, extract the arguments from the tool call.
-        if use_tools:
-            tool_calls = response_json['choices'][0]['message'].get('tool_calls')
-            if tool_calls:
-                arguments = tool_calls[0]['function']['arguments']
-                return arguments
-
-        # Otherwise, return the message content directly.
         return response_json['choices'][0]['message']['content']
     else:
         response.raise_for_status()

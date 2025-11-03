@@ -19,7 +19,7 @@ from utils import read_interview_data
 from utils import strip_webvtt_to_plain_text
 
 # Define the codes that are used
-codes = ['luonto', 'metsä', 'Taustapalvelu']
+codes = ['Luonto', 'Tyytyväisyys', 'Tervehdintä', 'Linnut', 'Metsä']
 # And read the texts of interest from the file system
 #contents = read_files(folder="data/linnut-03", prefix="inputfile")
 #contents = read_files(folder="data/linnut", prefix="nayte")
@@ -64,7 +64,7 @@ output_format = {
 }
 
 # For every text and code, generate {n_iter} decisions.
-n_iter = 3
+n_iter = 1
 
 results = []
 for fname, text in contents:
@@ -72,29 +72,47 @@ for fname, text in contents:
         idx = 0
         seed = 0
         while idx < n_iter:
-            # Define the instructions. 
+            # It is easier for llms to do the codebook in two steps: first request a free-formatted codebook and then request it in the correct format. 
+            # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
+
+            # Define the instructions for the first, free-form step.
             instruction = """
-            Olet laadullisen tutkimuksen avustaja. Saat tekstinäytteen sekä aineiston pohjalta rakennetun koodikirjan yksittäisen koodin. Lue teksti huolella ja päätä kuvaako koodi tekstinäytettä.
+            Päätä, liittyykö tekstinäyte annettuun koodiin. Vastaa "kyllä" tai "ei".
             """
 
             # Define the content snippet given to the llm.
-            content = f"Koodi: {code} \n\n Tekstinäyte: \n\n {text}"
+            content = f"Koodi:\n\n\"{code}\"\n\nTekstinäyte: \n\n\"{text}\""
 
             # Generate the answer
-            result = generate_simple(instruction, content, seed=idx, output_format=output_format, provider="llamacpp")
+            free_form_result = generate_simple(instruction, content, seed=idx, provider="llamacpp")
 
-            if not result:
-                print("Trying again..")
+            if not free_form_result:
+                print("Trying again.. (no result)")
                 print(f"Code was: {code}")
                 print(f"Text was: {text}")
                 print(f"Seed was: {seed}")
                 seed += 1
                 continue
-            
-            # Extract the result
-            print(f"Result was: {result}")
-            code_present = json.loads(result)['code_present']
-            
+
+            # Now, we use a second LLM call to format the free-form answer into the desired JSON format.
+            # This is more robust than trying to parse the free-form text manually.
+            formatting_instruction = '''
+            Saat syötteenä vapaamuotoisen viestin, joka on joko myönteinen tai kielteinen. Muotoile se uudelleen JSONiksi niin että code_present = true jos syöteteksti on myönteinen ja code_present = false jos syöteteksti on kielteinen.
+            '''
+
+            json_result_str = generate_simple(formatting_instruction, free_form_result, seed=10, output_format=output_format, provider="llamacpp")
+
+            try:
+                # Extract the boolean value from the JSON result.
+                code_present = json.loads(json_result_str)['code_present']
+            except (json.JSONDecodeError, KeyError):
+                print(f"Trying again.. (invalid JSON result: '{json_result_str}')")
+                print(f"Code was: {code}")
+                print(f"Text was: {text}")
+                print(f"Seed was: {seed}")
+                seed += 1
+                continue
+
             # Store it
             results.append({
                 "fname": fname,
@@ -104,7 +122,6 @@ for fname, text in contents:
             })
             idx += 1
             seed += 1
-
 # %%
 import pandas as pd
 
