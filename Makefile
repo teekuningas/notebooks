@@ -1,5 +1,5 @@
 JYU_SERVER = erpipehe@jyu2401-62.ws
-BIRD_SERVER = root@130.234.36.113
+BIRD_SERVER = root@130.234.36.115
 
 sync_jyu2401_62_up:
 	rsync --rsync-path="sudo rsync" -av --chown 1001:1001 *.py $(JYU_SERVER):/var/data/open-webui-setup/jupyterhub_home/ihmistieteilija/notebooks
