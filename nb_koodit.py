@@ -28,7 +28,7 @@ contents = read_interview_data("data/birdinterview", "observation")
 contents = filter_interview_simple(contents)
 
 # Convert to (rec_id, content) tuples for now
-contents = [(meta["rec_id"], text) for meta, text in contents][:3]
+contents = [(meta["rec_id"], text) for meta, text in contents][:60]
 
 # Print to check that texts are correctly read
 for rec_id, text in contents:
@@ -262,7 +262,7 @@ display(widgets.VBox([
 # Here we actually apply the threshold and create the clusters.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.4
+threshold = 0.28
 
 # Discard clusters with less than {min_size} elements.
 min_size = 2
@@ -312,9 +312,7 @@ for idx, cluster in enumerate(code_clusters):
     instruction = """
     Olet laadullisen tutkimuksen avustaja.
     Tehtäväsi on tiivistää lista samankaltaisia koodeja yhdeksi edustavaksi koodiksi.
-    Valitse olemassaolevista koodeista paras tai muodosta uusi, parempi koodi.
-    Koodin tulee olla ytimekäs, yleiskielinen suomenkielinen sana, mieluiten substantiivi.
-    Vältä vierasperäisiä sanoja, lyhenteitä ja monimutkaisia rakenteita.
+    Valitse olemassaolevista koodeista paras.
     """
 
     # For data, we set a comma-separated list of cluster elements.

@@ -16,140 +16,180 @@
 # %% [markdown]
 # # Theme Maps
 # 
-# This notebook creates maps from observations and their themes.
+# This notebook creates maps from observations and their themes, focusing on creating visually appealing, presentation-ready outputs.
 
-# %% 
+# %%
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon
+import matplotlib.pyplot as plt
+import os
+import colorsys
+from io import StringIO
+
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+import pandas as pd
+import requests
+from matplotlib.colors import LinearSegmentedColormap
+from shapely.geometry import Point, Polygon
 
-# %%
-# Load and merge datasets
-try:
-    themes = pd.read_csv('data/bird-metadata/themes.csv', index_col='rec_id')
-    recs = pd.read_csv('data/bird-metadata/recs_since_June25.csv')
-except FileNotFoundError as e:
-    print(f"Error loading data: {e}")
-    print("Please ensure the data files are in the 'data/bird-metadata/' directory.")
-    exit()
+def to_pastel_color(h, s=0.5, l=0.85):
+    # Convert HSL to RGB
+    rgb = colorsys.hls_to_rgb(h, l, s)
+    r, g, b = [int(x * 255) for x in rgb]
+    return f'#{r:02x}{g:02x}{b:02x}'
 
-# Merge recording metadata with themes
-merged_data = pd.merge(themes, recs, left_index=True, right_on='rec_id')
+def generate_greenish_pastel_colors(n=5):
+    base_hue = 0.33  # Green
+    single_pastel_color = to_pastel_color(base_hue, s=0.5, l=0.85)
+    return [single_pastel_color] * n
 
-# %%
-# Create GeoDataFrame
-geometry = [Point(xy) for xy in zip(merged_data['lon'], merged_data['lat'])]
-gdf = gpd.GeoDataFrame(merged_data, geometry=geometry, crs="EPSG:4326")
-
-# %% [markdown]
-# ## Visualization Experiments
-# 
-# Trying out five different ways to visualize the data on a map.
 
 # %% 
-# --- Visualization 1: Scatter Plot ---
-def plot_scatter(gdf, theme_name, output_filename):
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-    ax = world[world.name == 'Finland'].plot(color='white', edgecolor='black', ax=ax)
-    gdf.plot(ax=ax, column=theme_name, cmap='viridis', markersize=10, alpha=0.6, legend=True)
-    plt.title(f'Theme: {theme_name}')
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
-    plt.savefig(output_filename)
-    plt.close(fig)
+def load_data():
+    """
+    Loads, merges, and prepares the bird recording data.
 
-# %% 
-# --- Visualization 2: Hexbin Plot ---
-def plot_hexbin(gdf, theme_name, output_filename):
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-    ax = world[world.name == 'Finland'].plot(color='white', edgecolor='black', ax=ax)
-    
-    gdf = gdf[gdf.geometry.is_valid]
-    if not gdf.empty:
-        hb = ax.hexbin(gdf.geometry.x, gdf.geometry.y, C=gdf[theme_name], gridsize=50, cmap='inferno', alpha=0.7)
-        fig.colorbar(hb, ax=ax, label=f'{theme_name} Probability')
-    
-    plt.title(f'Theme: {theme_name} (Hexbin)')
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
-    plt.savefig(output_filename)
-    plt.close(fig)
+    Reads the themes and recording metadata, merges them, and returns a
+    GeoDataFrame with point geometries for each recording.
+    """
+    try:
+        themes = pd.read_csv('data/bird-metadata/themes_55x60.csv', index_col=0)
+        recs = pd.read_csv('data/bird-metadata/recs_since_June25.csv')
+    except FileNotFoundError as e:
+        print(f"Error loading data: {e}")
+        print("Please make sure the data files are in the 'data/bird-metadata/' directory.")
+        return None, None, None
 
-# %%
-# --- Visualization 3: Kernel Density Estimation (KDE) ---
-def plot_kde(gdf, theme_name, output_filename):
-    import seaborn as sns
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-    ax = world[world.name == 'Finland'].plot(color='white', edgecolor='black', ax=ax)
+    merged_data = pd.merge(themes, recs, left_index=True, right_on='rec_id')
+    geometry = [Point(xy) for xy in zip(merged_data['lon'], merged_data['lat'])]
+    gdf = gpd.GeoDataFrame(merged_data, geometry=geometry, crs="EPSG:4326")
     
-    gdf = gdf[gdf.geometry.is_valid]
-    if not gdf.empty:
-        sns.kdeplot(x=gdf.geometry.x, y=gdf.geometry.y, weights=gdf[theme_name], cmap="Reds", shade=True, alpha=0.5, ax=ax)
+    url = "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"
+    response = requests.get(url)
     
-    plt.title(f'Theme: {theme_name} (KDE)')
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
-    plt.savefig(output_filename)
-    plt.close(fig)
+    world = gpd.read_file(StringIO(response.text))
+    
+    finland_shape = world[world.name.isin(['Finland', 'Aland'])]
+    
+    return gdf, finland_shape, list(themes.columns)
 
-# %%
-# --- Visualization 4: Bubble Plot ---
-def plot_bubble(gdf, theme_name, output_filename):
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-    ax = world[world.name == 'Finland'].plot(color='white', edgecolor='black', ax=ax)
-    
-    sizes = gdf[theme_name] * 100
-    gdf.plot(ax=ax, column=theme_name, cmap='coolwarm', markersize=sizes, alpha=0.7, legend=True)
-    
-    plt.title(f'Theme: {theme_name} (Bubble Plot)')
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
-    plt.savefig(output_filename)
-    plt.close(fig)
+def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filename, grid_size=20, projection='EPSG:3067'):
+    """
+    Generates a grid-based map for a given theme, coloring cells by the ratio of presence.
+    """
+    if not pd.api.types.is_numeric_dtype(gdf[theme_name]):
+        print(f"Skipping non-numeric theme '{theme_name}'")
+        return
 
-# %% 
-# --- Visualization 5: Stamen Toner Base Map ---
-def plot_stamen(gdf, theme_name, output_filename):
-    import contextily as cx
-    
-    gdf_wm = gdf.to_crs(epsg=3857)
+    # 1. Reproject all data
+    gdf = gdf.to_crs(projection)
+    finland_shape = finland_shape.to_crs(projection)
+    maakuntarajat = maakuntarajat.to_crs(projection)
+
+    # Clip maakuntarajat to finland_shape to exclude water areas
+    maakuntarajat_clipped = gpd.overlay(maakuntarajat, finland_shape, how='intersection')
+
+    # Generate pastel colors for maakuntarajat_clipped
+    num_regions = len(maakuntarajat_clipped)
+    pastel_colors = generate_greenish_pastel_colors(num_regions)
+    maakuntarajat_clipped['color'] = pastel_colors
+
+    # 2. Create a grid in the new projection
+    xmin, ymin, xmax, ymax = finland_shape.total_bounds
+    cell_size = (xmax - xmin) / grid_size
+    grid_cells = []
+    for x in np.arange(xmin, xmax, cell_size):
+        for y in np.arange(ymin, ymax, cell_size):
+            grid_cells.append(Polygon([(x, y), (x + cell_size, y), (x + cell_size, y + cell_size), (x, y + cell_size)]))
+    grid = gpd.GeoDataFrame(grid_cells, columns=['geometry'], crs=projection)
+
+    # 3. Spatially join data to the grid
+    joined = gpd.sjoin(gdf, grid, how='inner', predicate='within')
+
+    # 4. Calculate presence ratio for each grid cell
+    grouped = joined.groupby('index_right')[theme_name].agg(
+        present_count=lambda x: (x > 0).sum(),
+        total_count='count'
+    ).reset_index()
+    grouped['ratio'] = grouped['present_count'] / grouped['total_count']
+
+    # 5. Merge ratio back to the grid
+    grid = grid.merge(grouped, left_index=True, right_on='index_right', how='left')
+    grid['ratio'] = grid['ratio'].fillna(-1) # Use -1 for no data
+
+    # 6. Plotting
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    
-    gdf_wm = gdf_wm[gdf_wm.geometry.is_valid]
-    if not gdf_wm.empty:
-        gdf_wm.plot(ax=ax, column=theme_name, cmap='gist_heat', markersize=15, alpha=0.7, legend=True)
-        cx.add_basemap(ax, crs=gdf_wm.crs, source=cx.providers.Stamen.TonerLite)
-    
-    plt.title(f'Theme: {theme_name} (Stamen Toner)')
+    fig.patch.set_facecolor('white')
+    ax.set_aspect('equal')
+
+    # Define a pastel colormap (blue -> off-white -> red)
+    pastel_cmap = LinearSegmentedColormap.from_list(
+        'pastel_map', 
+        [(0, '#6495ED'), (0.5, '#ffffef'), (1, '#FA8072')],
+        N=256
+    )
+
+    # Base layer: Finland shape
+    finland_shape.plot(ax=ax, color='#e0e0e0', edgecolor='#cccccc', linewidth=0.5)
+
+    # Overlay regional borders
+    maakuntarajat_clipped.plot(ax=ax, color=maakuntarajat_clipped['color'], edgecolor='#B0B0B0', linewidth=0.7, alpha=0.6)
+
+    # Plot the entire grid with a light background and outlines
+    grid.plot(ax=ax, color='none', edgecolor='white', linewidth=0.5)
+
+    # Plot grid cells with data on top
+    grid_with_data = grid[grid['ratio'] != -1]
+    grid_with_data.plot(column='ratio', cmap=pastel_cmap, linewidth=0.5, ax=ax, edgecolor='white', vmin=0, vmax=1)
+
     ax.set_axis_off()
-    plt.savefig(output_filename)
+    plt.title(f"Teeman '{theme_name}' yleisyys", fontsize=16, pad=10)
+
+    # Add a colorbar
+    sm = plt.cm.ScalarMappable(cmap=pastel_cmap, norm=plt.Normalize(vmin=0, vmax=1))
+    sm._A = [] # Fake up the array of the scalar mappable
+    cbar = fig.colorbar(sm, ax=ax, shrink=0.6)
+    cbar.set_label('Osuus')
+
+    plt.savefig(output_filename, bbox_inches='tight', pad_inches=0.1, dpi=300)
     plt.close(fig)
 
-# %% 
-if __name__ == '__main__':
-    theme_names = themes.columns
+def sanitize_filename(name):
+    """Sanitizes a string to be used as a filename."""
+    name = name.lower()
+    name = name.replace('ä', 'a').replace('ö', 'o').replace('å', 'a')
+    name = "".join(c for c in name if c.isalnum() or c in (' ', '_')).rstrip()
+    name = name.replace(' ', '_')
+    return name
 
-    # Create a directory for the maps
-    if not os.path.exists('maps'):
-        os.makedirs('maps')
+def main():
+    """Main function to generate maps for all themes."""
+    gdf, finland_shape, theme_names = load_data()
+    if gdf is None:
+        return
+
+    # Load regional borders
+    url = "https://raw.githubusercontent.com/samilaine/hallinnollisetrajat/refs/heads/main/maakuntarajat.json"
+    response = requests.get(url)
+    maakuntarajat = gpd.read_file(StringIO(response.text))
+
+    output_dir = 'output/maps'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     for theme in theme_names:
-        print(f"Generating maps for theme: {theme}...")
-        theme_dir = os.path.join('maps', theme)
+        safe_theme_name = sanitize_filename(theme)
+        print(f"Generating map for theme: {theme}...")
+        theme_dir = os.path.join(output_dir, safe_theme_name)
         if not os.path.exists(theme_dir):
             os.makedirs(theme_dir)
 
-        plot_scatter(gdf, theme, os.path.join(theme_dir, '01_scatter.png'))
-        plot_hexbin(gdf, theme, os.path.join(theme_dir, '02_hexbin.png'))
-        plot_kde(gdf, theme, os.path.join(theme_dir, '03_kde.png'))
-        plot_bubble(gdf, theme, os.path.join(theme_dir, '04_bubble.png'))
-        plot_stamen(gdf, theme, os.path.join(theme_dir, '05_stamen.png'))
-    
-    print("Maps generated in the 'maps' directory.")
+        plot_theme_map(gdf, finland_shape, maakuntarajat, theme, os.path.join(theme_dir, f'{safe_theme_name}_grid.png'))
+
+    print(f"\nMaps generated in the '{output_dir}' directory.")
+
+if __name__ == '__main__':
+    main()

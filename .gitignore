@@ -1,11 +1,9 @@
 .ipynb_checkpoints
 __pycache__
 
-# aider
-.aider*
-
 # let's not version the data
 data
+output
 
 # notebooks are paired with .py files
 *.ipynb
