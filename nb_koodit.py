@@ -28,7 +28,7 @@ contents = read_interview_data("data/birdinterview", "observation")
 contents = filter_interview_simple(contents)
 
 # Convert to (rec_id, content) tuples for now
-contents = [(meta["rec_id"], text) for meta, text in contents][:60]
+contents = [(meta["rec_id"], text) for meta, text in contents]
 
 # Print to check that texts are correctly read
 for rec_id, text in contents:

@@ -15,7 +15,7 @@
 
 # %% [markdown]
 # # Theme Maps
-# 
+#
 # This notebook creates maps from observations and their themes, focusing on creating visually appealing, presentation-ready outputs.
 
 # %%
@@ -47,7 +47,7 @@ def generate_greenish_pastel_colors(n=5):
     return [single_pastel_color] * n
 
 
-# %% 
+# %%
 def load_data():
     """
     Loads, merges, and prepares the bird recording data.
@@ -56,7 +56,7 @@ def load_data():
     GeoDataFrame with point geometries for each recording.
     """
     try:
-        themes = pd.read_csv('data/bird-metadata/themes_55x60.csv', index_col=0)
+        themes = pd.read_csv('data/bird-metadata/themes_1x400.csv', index_col=0)
         recs = pd.read_csv('data/bird-metadata/recs_since_June25.csv')
     except FileNotFoundError as e:
         print(f"Error loading data: {e}")
@@ -66,14 +66,14 @@ def load_data():
     merged_data = pd.merge(themes, recs, left_index=True, right_on='rec_id')
     geometry = [Point(xy) for xy in zip(merged_data['lon'], merged_data['lat'])]
     gdf = gpd.GeoDataFrame(merged_data, geometry=geometry, crs="EPSG:4326")
-    
+
     url = "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"
     response = requests.get(url)
-    
+
     world = gpd.read_file(StringIO(response.text))
-    
+
     finland_shape = world[world.name.isin(['Finland', 'Aland'])]
-    
+
     return gdf, finland_shape, list(themes.columns)
 
 def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filename, grid_size=20, projection='EPSG:3067'):

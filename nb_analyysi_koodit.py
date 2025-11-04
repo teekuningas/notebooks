@@ -21,7 +21,10 @@ from utils import strip_webvtt_to_plain_text
 from utils import filter_interview_simple
 
 # Define the codes that are used
-codes = ['Luonto', 'Rauha', 'Linnut', 'Ympäristö', 'Sää', 'Äänet', 'Eläimet', 'Kasvillisuus', 'Metsä', 'Havainto', 'Tunnelma', 'Kesä', 'Teknologia', 'Paikka', 'Järvi', 'Vesistö', 'Maisema', 'Maaseutu', 'Henkinen hyvinvointi', 'Luonnonkauneus', 'Rentoutuminen', 'Kiitollisuus', 'Aistimukset', 'Perhe', 'Puu', 'Muistot', 'Toiminta', 'Henkilökohtainen merkitys', 'Ympäristönsuojelu', 'Hiljaisuus', 'Kauneus', 'Sovellus', 'Yhteys', 'Piha', 'Tunteet', 'Ilmasto', 'Maatalous', 'Tyytyväisyys', 'Tila', 'Aika', 'Elämänhallinta', 'Yksinäisyys', 'Lomapaikka', 'Toivo', 'Turvallisuus', 'Luontokokemus', 'Hyvinvointi', 'Koti', 'Tuoksu', 'Värit', 'Luonnonläheisyys', 'Pesintä', 'Vapaus', 'Monimuotoisuus', 'Rantaelämä']
+#codes = ['Luonto', 'Rauha', 'Linnut', 'Ympäristö', 'Sää', 'Äänet', 'Eläimet', 'Kasvillisuus', 'Metsä', 'Havainto', 'Tunnelma', 'Kesä', 'Teknologia', 'Paikka', 'Järvi', 'Vesistö', 'Maisema', 'Maaseutu', 'Henkinen hyvinvointi', 'Luonnonkauneus', 'Rentoutuminen', 'Kiitollisuus', 'Aistimukset', 'Perhe', 'Puu', 'Muistot', 'Toiminta', 'Henkilökohtainen merkitys', 'Ympäristönsuojelu', 'Hiljaisuus', 'Kauneus', 'Sovellus', 'Yhteys', 'Piha', 'Tunteet', 'Ilmasto', 'Maatalous', 'Tyytyväisyys', 'Tila', 'Aika', 'Elämänhallinta', 'Yksinäisyys', 'Lomapaikka', 'Toivo', 'Turvallisuus', 'Luontokokemus', 'Hyvinvointi', 'Koti', 'Tuoksu', 'Värit', 'Luonnonläheisyys', 'Pesintä', 'Vapaus', 'Monimuotoisuus', 'Rantaelämä']
+#codes = ['Järvi', 'Maaseutu', 'Yksinäisyys']
+codes = ['Meri']
+
 
 # And read the texts of interest from the file system
 #contents = read_files(folder="data/linnut", prefix="nayte")
@@ -34,13 +37,15 @@ contents = filter_interview_simple(contents)
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
 # First a smaller sample
-codes = codes[:5]
-contents = contents[:30]
+#codes = codes[:5]
+contents = contents[:400]
 
-# Print to check that texts are correctly read
-for fname, text in contents:
-    print(f"{fname}:\n\n")
-    print(f"{text}\n\n")
+print(f"len(contents): {len(contents)}")
+
+## Print to check that texts are correctly read
+#for fname, text in contents:
+#    print(f"{fname}:\n\n")
+#    print(f"{text}\n\n")
 
 # %%
 import json
