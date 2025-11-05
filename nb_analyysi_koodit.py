@@ -21,9 +21,6 @@ from utils import strip_webvtt_to_plain_text
 from utils import filter_interview_simple
 
 # Define the codes that are used
-#codes = ['Luonto', 'Rauha', 'Linnut', 'Ympäristö', 'Sää', 'Äänet', 'Eläimet', 'Kasvillisuus', 'Metsä', 'Havainto', 'Tunnelma', 'Kesä', 'Teknologia', 'Paikka', 'Järvi', 'Vesistö', 'Maisema', 'Maaseutu', 'Henkinen hyvinvointi', 'Luonnonkauneus', 'Rentoutuminen', 'Kiitollisuus', 'Aistimukset', 'Perhe', 'Puu', 'Muistot', 'Toiminta', 'Henkilökohtainen merkitys', 'Ympäristönsuojelu', 'Hiljaisuus', 'Kauneus', 'Sovellus', 'Yhteys', 'Piha', 'Tunteet', 'Ilmasto', 'Maatalous', 'Tyytyväisyys', 'Tila', 'Aika', 'Elämänhallinta', 'Yksinäisyys', 'Lomapaikka', 'Toivo', 'Turvallisuus', 'Luontokokemus', 'Hyvinvointi', 'Koti', 'Tuoksu', 'Värit', 'Luonnonläheisyys', 'Pesintä', 'Vapaus', 'Monimuotoisuus', 'Rantaelämä']
-#codes = ['Järvi', 'Maaseutu', 'Yksinäisyys']
-#codes = ['Meri']
 codes = [
     'Luonto', 'Ympäristö', 'Rauha', 'Eläimet', 'Linnut', 'Metsä', 'Sää', 'Äänet', 'Eläimistö', 'Kasvillisuus', 'Rentoutuminen', 'Kauneus', 'Kasvit', 
     'Rauhallisuus', 'Lintujen laulu', 'Paikka', 'Maisema', 'Kiitollisuus', 'Tunteet', 'Ilmasto', 'Tunnelma', 'Hiljaisuus', 'Yksinäisyys', 'Ympäristönsuojelu', 
@@ -52,6 +49,9 @@ codes = [
     'Terapia', 'Ero kaupungista', 'Lomapaikka', 'Kaupunki vs. Maaseutu', 'Ihmiset', 'Kotiympäristö', 'Terassi', 'Ajan kuluminen', 'Hyöty', 'Omaisuus', 'Tuntu', 'Metsäkävely', 
     'Tila', 'Suojelu', 'Maaseutuelämä', 'Rantaelämä'
 ]
+
+codes = ['Nuotio'] 
+
 # And read the texts of interest from the file system
 #contents = read_files(folder="data/linnut", prefix="nayte")
 contents = read_interview_data("data/birdinterview", "observation")
@@ -62,9 +62,9 @@ contents = filter_interview_simple(contents)
 # Convert to (filename, content) tuples for now
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
-# First a smaller sample
-codes = codes[:5]
-contents = contents[:10]
+## First a smaller sample
+#codes = codes[:20]
+#contents = contents[:100]
 
 print(f"len(contents): {len(contents)}")
 print(f"len(codes): {len(codes)}")

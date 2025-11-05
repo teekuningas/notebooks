@@ -25,15 +25,14 @@ from shapely.geometry import Point, Polygon
 import matplotlib.pyplot as plt
 import os
 import colorsys
-from io import StringIO
-
-import geopandas as gpd
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import requests
 from matplotlib.colors import LinearSegmentedColormap
-from shapely.geometry import Point, Polygon
+
+# --- Configuration ---
+theme_path = 'koodidata/bird-themes/2025-11-05/themes_5x10_6741c7b0.csv'
+metadata_path = 'koodidata/bird-metadata/recs_since_June25.csv'
+output_dir = 'output/maps'
+# ---------------------
 
 def to_pastel_color(h, s=0.5, l=0.85):
     # Convert HSL to RGB
@@ -46,35 +45,13 @@ def generate_greenish_pastel_colors(n=5):
     single_pastel_color = to_pastel_color(base_hue, s=0.5, l=0.85)
     return [single_pastel_color] * n
 
-
-# %%
-def load_data():
-    """
-    Loads, merges, and prepares the bird recording data.
-
-    Reads the themes and recording metadata, merges them, and returns a
-    GeoDataFrame with point geometries for each recording.
-    """
-    try:
-        themes = pd.read_csv('koodidata/bird-themes/2025-11-04/themes_1x400.csv', index_col=0)
-        recs = pd.read_csv('koodidata/bird-metadata/recs_since_June25.csv')
-    except FileNotFoundError as e:
-        print(f"Error loading data: {e}")
-        print("Please make sure the data files are in the 'data/bird-metadata/' directory.")
-        return None, None, None
-
-    merged_data = pd.merge(themes, recs, left_index=True, right_on='rec_id')
-    geometry = [Point(xy) for xy in zip(merged_data['lon'], merged_data['lat'])]
-    gdf = gpd.GeoDataFrame(merged_data, geometry=geometry, crs="EPSG:4326")
-
-    url = "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"
-    response = requests.get(url)
-
-    world = gpd.read_file(StringIO(response.text))
-
-    finland_shape = world[world.name.isin(['Finland', 'Aland'])]
-
-    return gdf, finland_shape, list(themes.columns)
+def sanitize_filename(name):
+    """Sanitizes a string to be used as a filename."""
+    name = name.lower()
+    name = name.replace('ä', 'a').replace('ö', 'o').replace('å', 'a')
+    name = "".join(c for c in name if c.isalnum() or c in (' ', '_')).rstrip()
+    name = name.replace(' ', '_')
+    return name
 
 def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filename, grid_size=20, projection='EPSG:3067'):
     """
@@ -155,28 +132,29 @@ def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filenam
     cbar.set_label('Osuus')
 
     plt.savefig(output_filename, bbox_inches='tight', pad_inches=0.1, dpi=300)
-    plt.close(fig)
+    plt.show()
 
-def sanitize_filename(name):
-    """Sanitizes a string to be used as a filename."""
-    name = name.lower()
-    name = name.replace('ä', 'a').replace('ö', 'o').replace('å', 'a')
-    name = "".join(c for c in name if c.isalnum() or c in (' ', '_')).rstrip()
-    name = name.replace(' ', '_')
-    return name
 
-def main():
-    """Main function to generate maps for all themes."""
-    gdf, finland_shape, theme_names = load_data()
-    if gdf is None:
-        return
+# --- Data Loading ---
+try:
+    themes = pd.read_csv(theme_path, index_col=0)
+    recs = pd.read_csv(metadata_path)
+    theme_names = list(themes.columns)
+except FileNotFoundError as e:
+    print(f"Error loading data: {e}")
+    print("Please make sure the data files are in the correct directory.")
+    theme_names = [] # Ensure theme_names is defined
 
-    # Load regional borders
-    url = "https://raw.githubusercontent.com/samilaine/hallinnollisetrajat/refs/heads/main/maakuntarajat.json"
-    response = requests.get(url)
-    maakuntarajat = gpd.read_file(StringIO(response.text))
+if theme_names:
+    merged_data = pd.merge(themes, recs, left_index=True, right_on='rec_id')
+    geometry = [Point(xy) for xy in zip(merged_data['lon'], merged_data['lat'])]
+    gdf = gpd.GeoDataFrame(merged_data, geometry=geometry, crs="EPSG:4326")
 
-    output_dir = 'output/maps'
+    world = gpd.read_file('geo/ne_50m_admin_0_countries.geojson')
+    finland_shape = world[world.name.isin(['Finland', 'Aland'])]
+
+    maakuntarajat = gpd.read_file('geo/maakuntarajat.json')
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -191,5 +169,4 @@ def main():
 
     print(f"\nMaps generated in the '{output_dir}' directory.")
 
-if __name__ == '__main__':
-    main()
+# %%

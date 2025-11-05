@@ -18,9 +18,7 @@ import random
 import math
 import geopandas as gpd
 from shapely.geometry import Point
-import requests
 import matplotlib.pyplot as plt
-from io import StringIO
 
 from llm import generate_simple
 
@@ -108,13 +106,7 @@ def select_themes(location_type):
 def get_finland_geometry():
     print("Loading Finland geometry...")
     
-    url = "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"
-    
-    response = requests.get(url)
-    response.raise_for_status() # Raise an exception for bad status codes
-    
-    geojson_str = response.text
-    world = gpd.read_file(StringIO(geojson_str))
+    world = gpd.read_file('geo/ne_50m_admin_0_countries.geojson')
     finland_gdf = world[world['name'] == "Finland"]
     
     if finland_gdf.empty:

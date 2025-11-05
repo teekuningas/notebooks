@@ -9,7 +9,7 @@ sync_jyu2401_62_down:
 
 sync_bird_up:
 	ssh $(BIRD_SERVER) "mkdir -p /home/user/notebooks && chown user:users /home/user/notebooks"
-	rsync -av --chown user:users *.py $(BIRD_SERVER):/home/user/notebooks
+	rsync -av --chown user:users geo *.py $(BIRD_SERVER):/home/user/notebooks
 
 sync_bird_down:
-	rsync -av $(BIRD_SERVER):/home/user/notebooks/*.py .
+	rsync -av $(BIRD_SERVER):/home/user/notebooks/*.py geo .

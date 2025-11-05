@@ -18,21 +18,12 @@
 
 # %%
 import geopandas as gpd
-import requests
 import matplotlib.pyplot as plt
-from io import StringIO
 
 # Let's draw a very simple map of Finland
 
-# Fetch the GeoJSON data using requests
-url = "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"
-response = requests.get(url)
-
 # Read the GeoJSON content into a GeoDataFrame
-geojson_str = response.text
-    
-# Use StringIO to convert the string data to a file-like object for GeoPandas
-world = gpd.read_file(StringIO(geojson_str))
+world = gpd.read_file('geo/ne_50m_admin_0_countries.geojson')
     
 # Filter for Finland using the appropriate column
 finland = world[world['name'] == "Finland"]
@@ -44,9 +35,7 @@ plt.show()
 
 # %%
 import geopandas as gpd
-import requests
 import matplotlib.pyplot as plt
-from io import StringIO
 import random
 import colorsys
 
@@ -64,13 +53,8 @@ def generate_pastel_colors(n=5):
     pastel_colors = [to_pastel_color(h) for h in hues]
     return pastel_colors
 
-# Fetch the county GeoJSON data
-url = "https://raw.githubusercontent.com/samilaine/hallinnollisetrajat/refs/heads/main/maakuntarajat.json"
-response = requests.get(url)
-
 # Load data into GeoDataFrame
-county_geojson_str = response.text
-counties = gpd.read_file(StringIO(county_geojson_str))
+counties = gpd.read_file('geo/maakuntarajat.json')
 
 # Create random pastel colors
 pastel_colors = generate_pastel_colors(len(counties))
@@ -86,8 +70,6 @@ plt.show()
 
 # %%
 import geopandas as gpd
-import requests
-from io import StringIO
 import random
 import colorsys
 import folium
@@ -104,12 +86,8 @@ def generate_pastel_colors(n=5):
 
 # Let's draw counties overlaid to the folium default map (openstreetmap)
 
-url = "https://raw.githubusercontent.com/samilaine/hallinnollisetrajat/refs/heads/main/maakuntarajat.json"
-response = requests.get(url)
-
 # Load data into GeoDataFrame
-county_geojson_str = response.text
-counties = gpd.read_file(StringIO(county_geojson_str))
+counties = gpd.read_file('geo/maakuntarajat.json')
 
 # Generate pastel colors and assign them to counties
 pastel_colors = generate_pastel_colors(len(counties))
@@ -146,8 +124,6 @@ m
 
 # %%
 import geopandas as gpd
-import requests
-from io import StringIO
 import random
 import colorsys
 import folium
@@ -164,12 +140,8 @@ def generate_pastel_colors(n=5):
     pastel_colors = [to_pastel_color(h) for h in hues]
     return pastel_colors
 
-url = "https://raw.githubusercontent.com/samilaine/hallinnollisetrajat/refs/heads/main/kuntarajat.json"
-response = requests.get(url)
-
 # Load data into GeoDataFrame
-mun_geojson_str = response.text
-muns = gpd.read_file(StringIO(mun_geojson_str))
+muns = gpd.read_file('geo/kuntarajat.json')
 
 # Generate pastel colors and assign them to munincipalities
 pastel_colors = generate_pastel_colors(len(muns))
@@ -207,8 +179,6 @@ m
 
 # %%
 import geopandas as gpd
-import requests
-from io import StringIO
 import random
 import colorsys
 import folium
@@ -225,12 +195,8 @@ def generate_pastel_colors(n=5):
     pastel_colors = [to_pastel_color(h) for h in hues]
     return pastel_colors
 
-url = "https://raw.githubusercontent.com/samilaine/hallinnollisetrajat/refs/heads/main/kuntarajat.json"
-response = requests.get(url)
-
 # Load data into GeoDataFrame
-mun_geojson_str = response.text
-muns = gpd.read_file(StringIO(mun_geojson_str))
+muns = gpd.read_file('geo/kuntarajat.json')
 
 # Filter for Jyväskylä
 jyvaskyla = muns[muns['NAMEFIN'] == 'Jyväskylä'].copy()
@@ -275,10 +241,7 @@ m.add_to(f)
 m
 
 # %%
-from io import StringIO
-
 import geopandas as gpd
-import requests
 import numpy as np
 import folium
 from shapely.geometry import Point
@@ -288,9 +251,7 @@ from matplotlib import cm
 # Let's try drawing a heatmap over the map of Finland based on some point data.
 
 # Load county borders
-county_url = "https://raw.githubusercontent.com/samilaine/hallinnollisetrajat/refs/heads/main/maakuntarajat.json"
-county_response = requests.get(county_url)
-counties = gpd.read_file(StringIO(county_response.text))
+counties = gpd.read_file('geo/maakuntarajat.json')
 
 # Initialize folium map
 m = folium.Map(location=[64.9667, 25.6667], zoom_start=5, tiles='cartodbpositron')
