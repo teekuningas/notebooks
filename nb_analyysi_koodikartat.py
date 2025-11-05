@@ -56,8 +56,8 @@ def load_data():
     GeoDataFrame with point geometries for each recording.
     """
     try:
-        themes = pd.read_csv('data/bird-metadata/themes_1x400.csv', index_col=0)
-        recs = pd.read_csv('data/bird-metadata/recs_since_June25.csv')
+        themes = pd.read_csv('koodidata/bird-themes/2025-11-04/themes_1x400.csv', index_col=0)
+        recs = pd.read_csv('koodidata/bird-metadata/recs_since_June25.csv')
     except FileNotFoundError as e:
         print(f"Error loading data: {e}")
         print("Please make sure the data files are in the 'data/bird-metadata/' directory.")

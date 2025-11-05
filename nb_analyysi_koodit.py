@@ -23,9 +23,35 @@ from utils import filter_interview_simple
 # Define the codes that are used
 #codes = ['Luonto', 'Rauha', 'Linnut', 'Ympäristö', 'Sää', 'Äänet', 'Eläimet', 'Kasvillisuus', 'Metsä', 'Havainto', 'Tunnelma', 'Kesä', 'Teknologia', 'Paikka', 'Järvi', 'Vesistö', 'Maisema', 'Maaseutu', 'Henkinen hyvinvointi', 'Luonnonkauneus', 'Rentoutuminen', 'Kiitollisuus', 'Aistimukset', 'Perhe', 'Puu', 'Muistot', 'Toiminta', 'Henkilökohtainen merkitys', 'Ympäristönsuojelu', 'Hiljaisuus', 'Kauneus', 'Sovellus', 'Yhteys', 'Piha', 'Tunteet', 'Ilmasto', 'Maatalous', 'Tyytyväisyys', 'Tila', 'Aika', 'Elämänhallinta', 'Yksinäisyys', 'Lomapaikka', 'Toivo', 'Turvallisuus', 'Luontokokemus', 'Hyvinvointi', 'Koti', 'Tuoksu', 'Värit', 'Luonnonläheisyys', 'Pesintä', 'Vapaus', 'Monimuotoisuus', 'Rantaelämä']
 #codes = ['Järvi', 'Maaseutu', 'Yksinäisyys']
-codes = ['Meri']
-
-
+#codes = ['Meri']
+codes = [
+    'Luonto', 'Ympäristö', 'Rauha', 'Eläimet', 'Linnut', 'Metsä', 'Sää', 'Äänet', 'Eläimistö', 'Kasvillisuus', 'Rentoutuminen', 'Kauneus', 'Kasvit', 
+    'Rauhallisuus', 'Lintujen laulu', 'Paikka', 'Maisema', 'Kiitollisuus', 'Tunteet', 'Ilmasto', 'Tunnelma', 'Hiljaisuus', 'Yksinäisyys', 'Ympäristönsuojelu', 
+    'Kesä', 'Järvi', 'Luonnonkauneus', 'Havainto', 'Perhe', 'Muistot', 'Hyvinvointi', 'Tuoksu', 'Mökki', 'Teknologia', 'Aistimukset', 'Toiminta', 
+    'Monimuotoisuus', 'Yhteys luontoon', 'Havainnointi', 'Aika', 'Puut', 'Liikkuminen', 'Muutos', 'Rauhoittuminen', 'Vesistö', 'Luontokokemus', 'Vapaus', 
+    'Luontosuhde', 'Sijainti', 'Turvallisuus', 'Vapaa-aika', 'Maaseutu', 'Lintu', 'Kaupunki', 'Sovellus', 'Haju', 'Henkilökohtainen kokemus', 'Luontoympäristö', 
+    'Luonnon äänet', 'Harrastukset', 'Hyönteiset', 'Pihatoiminta', 'Kaupunkiympäristö', 'Kävely', 'Pihapiiri', 'Tunnistaminen', 'Arvostus', 'Ilmapiiri', 
+    'Asuinpaikka', 'Liikenne', 'Henkinen hyvinvointi', 'Koti', 'Aistit', 'Ihminen', 'Vuodenaika', 'Ilo', 'Asuinalue', 'Vesi', 'Surullisuus', 'Lintujen tarkkailu', 
+    'Ranta', 'Tuoksut', 'Lintubongaus', 'Lintujen havainnointi ja hoito', 'Mökkiympäristö', 'Sääolosuhteet', 'Piha', 'Perinteet', 'Tyytyväisyys', 'Terveys ja hyvinvointi', 
+    'Puutarha', 'Paikallisuus', 'Puita', 'Aamu', 'Kokemus', 'Kotipiha', 'Rakkaus', 'Retkeily', 'Eläinten käyttäytyminen', 'Lintuharrastus', 'Elämänkierto', 'Yhteys', 
+    'Häiriö', 'Metsämaisema', 'Kalastus', 'Tietoisuus', 'Lapsuusmuistot', 'Värit', 'Ihminen ja luonto', 'Miellyttävyys', 'Hajut', 'Elämykset', 'Työ', 'Puisto', 'Lähiluonto', 
+    'Toive', 'Rakennus', 'Kausivaihtelut', 'Luonnon puhtaus', 'Valo', 'Pelko', 'Haikeus', 'Tunne', 'Äänimaisema', 'Onnellisuus', 'Ilmastonmuutos', 
+    'Maatalous', 'Lintutorni', 'Elämänhallinta', 'Lapsuus', 'Kokemukset', 'Luonnon havainnointi', 'Vastuu', 'Tarkkailu', 'Ääni', 'Aktiviteetti', 'Sääolot', 'Viihtyvyys', 
+    'Rakennukset', 'Stressi', 'Lehto', 'Metsänhoito', 'Takapiha', 'Omakotitalo', 'Kukat ja luonto', 'Tutkiminen', 'Saari', 'Tunnelmat', 'Säilyminen', 'Nautinto', 'Lajit', 
+    'Elämänarvo', 'Opiskelu', 'Virkistys', 'Tuho', 'Omatoimisuus', 'Kiinnostus', 'Melu', 'Ilmastointi', 'Luonnon merkitys', 'Kesäloma', 'Lintutunnistus', 'Tekoäly', 
+    'Linnusto', 'Kukat', 'Ilma', 'Elävöityminen', 'Ärsykkeet', 'Aistikokemus', 'Rentous', 'Tutkimus', 'Luonto ja eläimet', 'Kevät', 'Tontti', 'Sienet', 'Oppiminen', 
+    'Perinne', 'Rauha ja rentoutuminen', 'Kaipuu', 'Toivo', 'Henkilökohtainen merkitys', 'Luonnon läheisyys', 'Pesintä', 'Ympäristöhuoli', 'Henkilökohtainen kehitys', 
+    'Sienestys', 'Kesäilta', 'Kotoutuminen', 'Tulevaisuus', 'Ilon ja tyytyväisyyden tunne', 'Lintutarkkailu', 'Itsetietoisuus', 'Viestintä', 'Sukupolvet', 'Ulkonäkö', 
+    'Kuusi', 'Ystävyys', 'Hiekkatie', 'Luonnon kokemus', 'Pohjoismaat', 'Elämänlaatu', 'Pellot', 'Luonnonilmiöt', 'Huoli', 'Näkymä', 'Voima', 'Joutsenet', 'Uiminen', 
+    'Vene', 'Aistimus', 'Perhoset', 'Lampi', 'Puutarhatyöt', 'Kotiseutu', 'Hiljentyminen', 'Ilmanlaatu', 'Näkyvyys', 'Maantiede', 'Sosiaalinen vuorovaikutus', 'Luonnon ominaisuudet', 
+    'Kaavoitus', 'Säänolot', 'Talousmetsä', 'Rauha ja tyyneys', 'Vuorovaikutus', 'Rakennelmat', 'Kaupunkiluonto', 'Ilahduttavuus', 'Tiede', 'Marjat', 'Lämpötila', 
+    'Luontoäänet', 'Laituri', 'Luontokuvaus', 'Opettaminen', 'Uhka', 'Rantakasvillisuus', 'Suojeleminen', 'Meri', 'Elämän jatkuvuus', 'Tunteet ja ajatukset', 'Maasto', 
+    'Positiiviset ajatukset', 'Havainnot', 'Joki', 'Mökilläolo', 'Mökkikokemus', 'Tuuli', 'Rakennettu ympäristö', 'Kesäaamu', 'Näköala', 'Erämaa', 'Geologia', 'Jokimaisema', 
+    'Vuodenaikojen vaihtelu', 'Uimaranta', 'Niitty', 'Luontopolku', 'Sesonki', 'Hauskuus', 'Elämys', 'Ääntäminen', 'Tapahtumat', 'Asutus', 'Ilta', 'Perspektiivi', 'Alue', 
+    'Syksy', 'Luonnonpuisto', 'Identiteetti', 'Asuinympäristö', 'Kasvisto', 'Järvet', 'Hengellisyys', 'Aurinko', 'Nuotio', 'Kesämökki', 'Elämänreflektio', 'Mökkiloma', 
+    'Terapia', 'Ero kaupungista', 'Lomapaikka', 'Kaupunki vs. Maaseutu', 'Ihmiset', 'Kotiympäristö', 'Terassi', 'Ajan kuluminen', 'Hyöty', 'Omaisuus', 'Tuntu', 'Metsäkävely', 
+    'Tila', 'Suojelu', 'Maaseutuelämä', 'Rantaelämä'
+]
 # And read the texts of interest from the file system
 #contents = read_files(folder="data/linnut", prefix="nayte")
 contents = read_interview_data("data/birdinterview", "observation")
@@ -37,10 +63,11 @@ contents = filter_interview_simple(contents)
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
 # First a smaller sample
-#codes = codes[:5]
-contents = contents[:400]
+codes = codes[:5]
+contents = contents[:10]
 
 print(f"len(contents): {len(contents)}")
+print(f"len(codes): {len(codes)}")
 
 ## Print to check that texts are correctly read
 #for fname, text in contents:
@@ -130,6 +157,7 @@ for idx, (fname, text) in enumerate(contents):
             seed += 1
 # %%
 import pandas as pd
+from uuid import uuid4
 
 # Here we use pandas to construct a simple colored table out of the results.
 
@@ -160,7 +188,7 @@ for fname in transformed_data:
 df = pd.DataFrame.from_dict(transformed_data, orient='index')
 
 # Save the DataFrame with values between 0 and 1
-df.to_csv("output/analyysi_koodit.csv")
+df.to_csv(f"output/themes_{len(codes)}x{len(contents)}_{str(uuid4())[:8]}.csv")
 
 # Add averages and format for visualization
 df['total'] = df.mean(axis=1)

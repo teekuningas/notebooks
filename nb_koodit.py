@@ -30,10 +30,12 @@ contents = filter_interview_simple(contents)
 # Convert to (rec_id, content) tuples for now
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
-# Print to check that texts are correctly read
-for rec_id, text in contents:
-    print(f"{rec_id}:\n\n")
-    print(f"{text}\n\n")
+print(f"len(contents): {len(contents)}")
+
+## Print to check that texts are correctly read
+#for rec_id, text in contents:
+#    print(f"{rec_id}:\n\n")
+#    print(f"{text}\n\n")
 
 # %%
 import json
@@ -259,10 +261,11 @@ display(widgets.VBox([
 ]))
 
 # %%
+from uuid import uuid4
 # Here we actually apply the threshold and create the clusters.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.28
+threshold = 0.25
 
 # Discard clusters with less than {min_size} elements.
 min_size = 2
@@ -272,13 +275,24 @@ distance_matrix = pdist(vectors, metric='cosine')
 Z = linkage(distance_matrix, method='average')
 clusters = fcluster(Z, threshold, criterion='distance')
 
-# Reorganize to a simple list of clusters with smallest clusters (size < {min_size}) discarded
+# Reorganize to a simple list of clusters
 cluster_dict = {}
 for cluster_id, code in zip(clusters, codes):
     if cluster_id not in cluster_dict:
         cluster_dict[cluster_id] = []
     cluster_dict[cluster_id].append(code)
-code_clusters = sorted([cluster[1] for cluster in cluster_dict.items() if len(cluster[1]) >= min_size], key=lambda x: len(x))
+code_clusters = sorted([cluster[1] for cluster in cluster_dict.items()], key=lambda x: len(x))
+
+# Write all clusters to a file
+output_str = ""
+for idx, cluster in enumerate(code_clusters):
+    output_str += f"{idx+1}: {cluster}\n"
+    
+with open(f"output/clusters_{str(uuid4())[:8]}.txt", "w") as f:
+    f.write(output_str)
+
+# Discard smallest clusters (size < {min_size})
+code_clusters = [cluster for cluster in code_clusters if len(cluster) >= min_size]
 
 # Finally print the resulting clusters to check
 for idx, cluster in enumerate(code_clusters):
@@ -287,6 +301,7 @@ for idx, cluster in enumerate(code_clusters):
 
 # %%
 from llm import generate_simple
+from uuid import uuid4
 
 # Now we have clusters, but we actually wanted a codebook. We will ask llm to pick or create a represenative code for each of the clusters.
 
@@ -336,7 +351,7 @@ output_str += str(list(dict.fromkeys(reversed([codedict['code'] for codedict in 
 
 print(output_str)
 
-with open("output/koodit.txt", "w") as f:
+with open(f"output/koodit_{str(uuid4())[:8]}.txt", "w") as f:
     f.write(output_str)
 
 # %%

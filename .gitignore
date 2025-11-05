@@ -4,6 +4,7 @@ __pycache__
 # let's not version the data
 data
 output
+koodidata
 
 # notebooks are paired with .py files
 *.ipynb
