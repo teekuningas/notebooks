@@ -29,8 +29,8 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
 # --- Configuration ---
-theme_path = 'koodidata/bird-themes/2025-11-05/themes_5x10_6741c7b0.csv'
-metadata_path = 'koodidata/bird-metadata/recs_since_June25.csv'
+theme_path = 'output/themes_1x50_f60ef36f.csv'
+metadata_path = '/home/user/bird-metadata/recs_since_June25.csv'
 output_dir = 'output/maps'
 # ---------------------
 

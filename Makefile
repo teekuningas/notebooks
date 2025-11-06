@@ -12,4 +12,4 @@ sync_bird_up:
 	rsync -av --chown user:users geo *.py $(BIRD_SERVER):/home/user/notebooks
 
 sync_bird_down:
-	rsync -av $(BIRD_SERVER):/home/user/notebooks/*.py geo .
+	rsync -av $(BIRD_SERVER):/home/user/notebooks/*.py .

@@ -50,7 +50,7 @@ codes = [
     'Tila', 'Suojelu', 'Maaseutuelämä', 'Rantaelämä'
 ]
 
-codes = ['Nuotio'] 
+codes = ['Hengellisyys'] 
 
 # And read the texts of interest from the file system
 #contents = read_files(folder="data/linnut", prefix="nayte")
@@ -64,7 +64,7 @@ contents = [(meta["rec_id"], text) for meta, text in contents]
 
 ## First a smaller sample
 #codes = codes[:20]
-#contents = contents[:100]
+#contents = contents[:50]
 
 print(f"len(contents): {len(contents)}")
 print(f"len(codes): {len(codes)}")

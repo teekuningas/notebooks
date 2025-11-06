@@ -30,13 +30,15 @@ contents = filter_interview_simple(contents)
 # Convert to (filename, content) tuples for now
 contents = [(meta["filename"], text) for meta, text in contents]
 
-# Print to check that texts are correctly read
-print("Luetut tekstit:")
-print(f"\n--------------------------\n")
-for fname, text in contents:
-    print(f"{fname}:\n")
-    print(f"{text}\n")
-    print(f"\n--------------------------\n")
+contents = contents[:10]
+
+## Print to check that texts are correctly read
+#print("Luetut tekstit:")
+#print(f"\n--------------------------\n")
+#for fname, text in contents:
+#    print(f"{fname}:\n")
+#    print(f"{text}\n")
+#    print(f"\n--------------------------\n")
 
 # %% [markdown]
 # Esitetään seuraavaksi sama alla määritelty kysymys jokaiselle tekstille erikseen ja kerätään tulokset.
@@ -46,7 +48,7 @@ from llm import generate_simple
 
 # Define the question
 question = """
-Esiintyykö tekstissä ristiriitaisia tunteita?
+Esiintyykö tekstissä hengellisyytta? Mita sanoja haastateltava kayttaa hengellisyyden ilmaisemiseen?
 """
 
 # In a loop, ask the question for all the texts.
