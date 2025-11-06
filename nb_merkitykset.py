@@ -30,7 +30,7 @@ contents = filter_interview_simple(contents)
 # Convert to (rec_id, content) tuples for now
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
-contents = contents[:5]
+contents = contents[:50]
 
 print(f"len(contents): {len(contents)}")
 
@@ -76,34 +76,33 @@ output_format = {
     ]
 }
 
-# For every text, generate {n_iter} meaningbooks. 
+# For every text, generate {n_iter} meaningbooks.
 n_iter = 1
 
-meaninglists = []
-for idx, (rec_id, text) in enumerate(contents):
-    print(f"Generating meaningbook {idx+1} for {rec_id}..")
-    subresults = []
-    for idx in range(n_iter):
+meanings = []
+for rec_idx, (rec_id, text) in enumerate(contents):
+    print(f"Generating meaningbook {rec_idx+1} for {rec_id}..")
+    for iter_idx in range(n_iter):
 
-        # It is easier for llms to do the meaningbook in two steps: first request a free-formatted meaningbook and then request it in the correct format. 
+        # It is easier for llms to do the meaningbook in two steps: first request a free-formatted meaningbook and then request it in the correct format.
         # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
 
         # Define the instruction for the first step:
         instruction = """
         Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä kaikki emotionaaliset merkitykset.
 
-        Listaa emotionaaliset merkitykset. Jokaisella emotionaalisella merkityksella tulee olla perustelu.
+        Listaa emotionaaliset merkitykset. Jokaisella emotionaolisella merkityksella tulee olla perustelu.
 
         Vastaa suomeksi.
-        """ 
-        
+        """
+
         # Generate the intermediate result using the text, the instruction and a unique seed (to get a different result each time):
-        result = generate_simple(instruction, text, seed=idx, provider="llamacpp")
+        result = generate_simple(instruction, text, seed=iter_idx, provider="llamacpp")
 
         # Extract the result
         content = result
 
-        # Define the instruction for the formatting task: 
+        # Define the instruction for the formatting task:
         instruction = """
         Muotoile annettu vapaamuotoinen emotionaalisista merkityksista koostuva lista pyydettyyn JSON-muotoon.
         """
@@ -112,21 +111,19 @@ for idx, (rec_id, text) in enumerate(contents):
         result = generate_simple(instruction, content, seed=10, output_format=output_format, provider="llamacpp")
 
         # Extract the machine-readable result.
-        meanings = json.loads(result)['meanings']
+        generated_meanings = json.loads(result)['meanings']
 
         # Store the single result.
-        subresults.append(meanings)
+        for m in generated_meanings:
+            meanings.append({
+                "meaning": m["meaning"],
+                "explanation": m["explanation"],
+                "rec_id": rec_id,
+                "iter_idx": iter_idx
+            })
 
-    # Store the results of all iterations of a single text.
-    meaninglists.append((rec_id, subresults))
-
-# Now meaninglists variable includes {n_iter} meaningbooks for each of the texts. Print them to see.
-for rec_id, subresults in meaninglists:
-    print(f"{rec_id}:\n")
-    for idx, meaninglist in enumerate(subresults):
-        print(f"Iteraatio {idx+1}\n")
-        pprint(meaninglist)
-        print("")
+# Now meanings variable includes all meaning-explanation pairs from all texts and all iterations.
+pprint(meanings)
 
 
 # %%
@@ -141,17 +138,10 @@ from llm import embed
 # 4) The meanings in a cluster are combined so that each cluster has a representative meaning.
 # This process allows us to find the most reliable meanings of all texts. Of course, this has a trade-off and manual inspection is recommended.
 
-# First, flatten the meaningbooks into a single list of meanings.
-meanings = []
-for name, textvalues in meaninglists:
-    for iteration in textvalues:
-        for meaningdict in iteration:
-            meanings.append(meaningdict['meaning'].replace("*", ""))
-
 # Embed each meaning into the "semantic space".
 vectors = []
 for meaning in meanings:
-    result = embed(meaning, provider="llamacpp")
+    result = embed(meaning['meaning'].replace("*", ""), provider="llamacpp")
     vectors.append(result)
 
 print(f"{len(vectors)} meanings embedded.")
@@ -245,7 +235,7 @@ def update_plot(threshold):
     clusters = fcluster(Z, threshold, criterion='distance')
     n_clusters = len(np.unique(clusters))
     cluster_info.value = f"Number of clusters: {n_clusters}"
-    cluster_contents.value = format_cluster_contents(clusters, meanings)
+    cluster_contents.value = format_cluster_contents(clusters, [m['meaning'] for m in meanings])
     
     # Ensure proper layout
     plt.tight_layout()
@@ -265,7 +255,7 @@ from uuid import uuid4
 # Here we actually apply the threshold and create the clusters.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.25
+threshold = 0.28
 
 # Discard clusters with less than {min_size} elements.
 min_size = 2
@@ -286,9 +276,9 @@ meaning_clusters = sorted([cluster[1] for cluster in cluster_dict.items()], key=
 # Write all clusters to a file
 output_str = ""
 for idx, cluster in enumerate(meaning_clusters):
-    output_str += f"{idx+1}: {cluster}\n"
+    output_str += f"{idx+1}: {[item['meaning'] for item in cluster]}\n"
     
-with open(f"output/clusters_{str(uuid4())[:8]}.txt", "w") as f:
+with open(f"output/merkitykset_clusters_{str(uuid4())[:8]}.txt", "w") as f:
     f.write(output_str)
 
 # Discard smallest clusters (size < {min_size})
@@ -296,7 +286,7 @@ meaning_clusters = [cluster for cluster in meaning_clusters if len(cluster) >= m
 
 # Finally print the resulting clusters to check
 for idx, cluster in enumerate(meaning_clusters):
-    print(f"{idx+1}: {cluster}")
+    print(f"{idx+1}: {[item['meaning'] for item in cluster]}")
 
 
 # %%
@@ -331,7 +321,7 @@ for idx, cluster in enumerate(meaning_clusters):
     """
 
     # For data, we set a comma-separated list of cluster elements.
-    data = ", ".join(cluster)
+    data = ", ".join([item['meaning'] for item in cluster])
 
     # Send the request to llm.
     result = generate_simple(instruction, data, seed=10, output_format=output_format, provider="llamacpp")
@@ -345,7 +335,7 @@ for idx, cluster in enumerate(meaning_clusters):
 # Print the final meaningbook and save to file.
 output_str = "Final meanings:\n"
 for idx, meaning in enumerate(final_meanings):
-    output_str += f"{idx+1}: {meaning} ({', '.join(meaning_clusters[idx])})\n"
+    output_str += f"{idx+1}: {meaning} ({', '.join([item['meaning'] for item in meaning_clusters[idx]])})\n"
 output_str += "\nIn a format for easy copying:\n"
 output_str += str(list(dict.fromkeys(reversed([meaningdict['meaning'] for meaningdict in final_meanings]))))
 
@@ -353,5 +343,23 @@ print(output_str)
 
 with open(f"output/merkitykset_{str(uuid4())[:8]}.txt", "w") as f:
     f.write(output_str)
+
+# %%
+from uuid import uuid4
+
+# Create a summary document
+summary_str = ""
+for final_meaning, cluster in zip(final_meanings, meaning_clusters):
+    summary_str += f"Meaning: {final_meaning['meaning']}\n"
+    summary_str += "-------------------------\n"
+    for item in cluster:
+        summary_str += f"  - Explanation: {item['explanation']}\n"
+        summary_str += f"    Rec ID: {item['rec_id']}, Iteration: {item['iter_idx']}\n"
+    summary_str += "\n"
+
+print(summary_str)
+
+with open(f"output/merkitykset_summary_{str(uuid4())[:8]}.txt", "w") as f:
+    f.write(summary_str)
 
 # %%
