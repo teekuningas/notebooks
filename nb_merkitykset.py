@@ -46,18 +46,18 @@ from pprint import pprint
 
 from llm import generate_simple
 
-# Now, generate a codebook for each text. To mitigate randomness, we actually generate multiple codebooks for each text, and afterwards combine all codebooks of all texts into one codebook with clustering.
+# Now, generate a meaningbook for each text. To mitigate randomness, we actually generate multiple meaningbooks for each text, and afterwards combine all meaningbooks of all texts into one meaningbook with clustering.
 
-# Specify a machine-readable output format for a single codebook (a list of code-explanation pairs)
+# Specify a machine-readable output format for a single meaningbook (a list of meaning-explanation pairs)
 output_format = {
     "type": "object",
     "properties": {
-        "codes": {
+        "meanings": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "code": {
+                    "meaning": {
                         "type": "string"
                     },
                     "explanation": {
@@ -65,27 +65,27 @@ output_format = {
                     }
                 },
                 "required": [
-                    "code",
+                    "meaning",
                     "explanation"
                 ]
             }
         }
     },
     "required": [
-      "codes"
+      "meanings"
     ]
 }
 
-# For every text, generate {n_iter} codebooks. 
+# For every text, generate {n_iter} meaningbooks. 
 n_iter = 1
 
-codelists = []
+meaninglists = []
 for idx, (rec_id, text) in enumerate(contents):
-    print(f"Generating codebook {idx+1} for {rec_id}..")
+    print(f"Generating meaningbook {idx+1} for {rec_id}..")
     subresults = []
     for idx in range(n_iter):
 
-        # It is easier for llms to do the codebook in two steps: first request a free-formatted codebook and then request it in the correct format. 
+        # It is easier for llms to do the meaningbook in two steps: first request a free-formatted meaningbook and then request it in the correct format. 
         # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
 
         # Define the instruction for the first step:
@@ -112,20 +112,20 @@ for idx, (rec_id, text) in enumerate(contents):
         result = generate_simple(instruction, content, seed=10, output_format=output_format, provider="llamacpp")
 
         # Extract the machine-readable result.
-        codes = json.loads(result)['codes']
+        meanings = json.loads(result)['meanings']
 
         # Store the single result.
-        subresults.append(codes)
+        subresults.append(meanings)
 
     # Store the results of all iterations of a single text.
-    codelists.append((rec_id, subresults))
+    meaninglists.append((rec_id, subresults))
 
-# Now codelists variable includes {n_iter} codebooks for each of the texts. Print them to see.
-for rec_id, subresults in codelists:
+# Now meaninglists variable includes {n_iter} meaningbooks for each of the texts. Print them to see.
+for rec_id, subresults in meaninglists:
     print(f"{rec_id}:\n")
-    for idx, codelist in enumerate(subresults):
+    for idx, meaninglist in enumerate(subresults):
         print(f"Iteraatio {idx+1}\n")
-        pprint(codelist)
+        pprint(meaninglist)
         print("")
 
 
@@ -135,26 +135,26 @@ import numpy as np
 from llm import embed
 
 # In the following steps, we 
-# 1) Flatten all the codebooks into a single list of codes
-# 2) The codes are embedded into a "semantic space" 
-# 3) The embedded codes are clustered (put into groups) and the smallest clusters are discarded. 
-# 4) The codes in a cluster are combined so that each cluster .
-# This process allows us to find the most reliable codes of all texts. Of course, this has a trade-off and manual inspection is recommended.
+# 1) Flatten all the meaningbooks into a single list of meanings
+# 2) The meanings are embedded into a "semantic space" 
+# 3) The embedded meanings are clustered (put into groups) and the smallest clusters are discarded. 
+# 4) The meanings in a cluster are combined so that each cluster has a representative meaning.
+# This process allows us to find the most reliable meanings of all texts. Of course, this has a trade-off and manual inspection is recommended.
 
-# First, flatten the codebooks into a single list of codes.
-codes = []
-for name, textvalues in codelists:
+# First, flatten the meaningbooks into a single list of meanings.
+meanings = []
+for name, textvalues in meaninglists:
     for iteration in textvalues:
-        for codedict in iteration:
-            codes.append(codedict['code'].replace("*", ""))
+        for meaningdict in iteration:
+            meanings.append(meaningdict['meaning'].replace("*", ""))
 
-# Embed each code into the "semantic space".
+# Embed each meaning into the "semantic space".
 vectors = []
-for code in codes:
-    result = embed(code, provider="llamacpp")
+for meaning in meanings:
+    result = embed(meaning, provider="llamacpp")
     vectors.append(result)
 
-print(f"{len(vectors)} codes embedded.")
+print(f"{len(vectors)} meanings embedded.")
 
 # %%
 import numpy as np
@@ -164,7 +164,7 @@ from scipy.spatial.distance import pdist
 import ipywidgets as widgets
 from IPython.display import display
 
-# Then the clustering. The folllab/tree/notebooks/nb_analyysi_koodit.ipynbowing code creates a visualization of the clustering as a tree and creates a user-controlled slider to change the cut-off threshold.
+# Then the clustering. The following code creates a visualization of the clustering as a tree and creates a user-controlled slider to change the cut-off threshold.
 # The resulting clusters are written below the plots. Here, one can experiment with different thresholds. The threshold is then set in the next step.
 
 # Helper function to calculate within-cluster sum of squares (WCSS) for a range of thresholds
@@ -181,13 +181,13 @@ def calculate_wcss(vectors, Z, thresholds):
         wcss_values.append(wcss)
     return wcss_values
 
-# Helper function to get the rendered text based on clusters and codes
-def format_cluster_contents(clusters, codes):
+# Helper function to get the rendered text based on clusters and meanings
+def format_cluster_contents(clusters, meanings):
     cluster_dict = {}
-    for cluster_id, code in zip(clusters, codes):
+    for cluster_id, meaning in zip(clusters, meanings):
         if cluster_id not in cluster_dict:
             cluster_dict[cluster_id] = []
-        cluster_dict[cluster_id].append(code)
+        cluster_dict[cluster_id].append(meaning)
         
     html = "<div style='max-height: 400px; overflow-y: auto;'>"
     for cluster_id in sorted(cluster_dict.keys()):
@@ -198,7 +198,7 @@ def format_cluster_contents(clusters, codes):
     html += "</div>"
     return html
 
-# Generate a static linkage-structure for the embedded codes, used in clustering
+# Generate a static linkage-structure for the embedded meanings, used in clustering
 distance_matrix = pdist(vectors, metric='cosine')
 Z = linkage(distance_matrix, method='average')
 
@@ -245,13 +245,13 @@ def update_plot(threshold):
     clusters = fcluster(Z, threshold, criterion='distance')
     n_clusters = len(np.unique(clusters))
     cluster_info.value = f"Number of clusters: {n_clusters}"
-    cluster_contents.value = format_cluster_contents(clusters, codes)
+    cluster_contents.value = format_cluster_contents(clusters, meanings)
     
     # Ensure proper layout
     plt.tight_layout()
     plt.show()
 
-# Finall, create and show interactive clustering widget.
+# Finally, create and show interactive clustering widget.
 interactive_plot = widgets.interactive(update_plot, threshold=threshold_slider)
 display(widgets.VBox([
     threshold_slider,
@@ -277,25 +277,25 @@ clusters = fcluster(Z, threshold, criterion='distance')
 
 # Reorganize to a simple list of clusters
 cluster_dict = {}
-for cluster_id, code in zip(clusters, codes):
+for cluster_id, meaning in zip(clusters, meanings):
     if cluster_id not in cluster_dict:
         cluster_dict[cluster_id] = []
-    cluster_dict[cluster_id].append(code)
-code_clusters = sorted([cluster[1] for cluster in cluster_dict.items()], key=lambda x: len(x))
+    cluster_dict[cluster_id].append(meaning)
+meaning_clusters = sorted([cluster[1] for cluster in cluster_dict.items()], key=lambda x: len(x))
 
 # Write all clusters to a file
 output_str = ""
-for idx, cluster in enumerate(code_clusters):
+for idx, cluster in enumerate(meaning_clusters):
     output_str += f"{idx+1}: {cluster}\n"
     
 with open(f"output/clusters_{str(uuid4())[:8]}.txt", "w") as f:
     f.write(output_str)
 
 # Discard smallest clusters (size < {min_size})
-code_clusters = [cluster for cluster in code_clusters if len(cluster) >= min_size]
+meaning_clusters = [cluster for cluster in meaning_clusters if len(cluster) >= min_size]
 
 # Finally print the resulting clusters to check
-for idx, cluster in enumerate(code_clusters):
+for idx, cluster in enumerate(meaning_clusters):
     print(f"{idx+1}: {cluster}")
 
 
@@ -303,31 +303,31 @@ for idx, cluster in enumerate(code_clusters):
 from llm import generate_simple
 from uuid import uuid4
 
-# Now we have clusters, but we actually wanted a codebook. We will ask llm to pick or create a represenative code for each of the clusters.
+# Now we have clusters, but we actually wanted a meaningbook. We will ask llm to pick or create a represenative meaning for each of the clusters.
 
 # Specify a machine-readable output format
 output_format = {
     "type": "object",
     "properties": {
-        "code": {
+        "meaning": {
             "type": "string"
         }
     },
     "required": [
-      "code"
+      "meaning"
     ]
 }
 
 # Go through each of the clusters, and generate a representative
-final_codes = []
-for idx, cluster in enumerate(code_clusters):
+final_meanings = []
+for idx, cluster in enumerate(meaning_clusters):
     
     # Define a instruction:
     
     instruction = """
     Olet laadullisen tutkimuksen avustaja.
-    Tehtäväsi on tiivistää lista samankaltaisia koodeja yhdeksi edustavaksi koodiksi.
-    Valitse olemassaolevista koodeista paras.
+    Tehtäväsi on tiivistää lista samankaltaisia merkityksiä yhdeksi edustavaksi merkitykseksi.
+    Valitse olemassa olevista merkityksistä paras.
     """
 
     # For data, we set a comma-separated list of cluster elements.
@@ -336,22 +336,22 @@ for idx, cluster in enumerate(code_clusters):
     # Send the request to llm.
     result = generate_simple(instruction, data, seed=10, output_format=output_format, provider="llamacpp")
 
-    # Extract the code
-    code = json.loads(result)
+    # Extract the meaning
+    meaning = json.loads(result)
 
     # And store it
-    final_codes.append(code)
+    final_meanings.append(meaning)
 
-# Print the final codebook and save to file.
-output_str = "Final codes:\n"
-for idx, code in enumerate(final_codes):
-    output_str += f"{idx+1}: {code} ({', '.join(code_clusters[idx])})\n"
+# Print the final meaningbook and save to file.
+output_str = "Final meanings:\n"
+for idx, meaning in enumerate(final_meanings):
+    output_str += f"{idx+1}: {meaning} ({', '.join(meaning_clusters[idx])})\n"
 output_str += "\nIn a format for easy copying:\n"
-output_str += str(list(dict.fromkeys(reversed([codedict['code'] for codedict in final_codes]))))
+output_str += str(list(dict.fromkeys(reversed([meaningdict['meaning'] for meaningdict in final_meanings]))))
 
 print(output_str)
 
-with open(f"output/koodit_{str(uuid4())[:8]}.txt", "w") as f:
+with open(f"output/merkitykset_{str(uuid4())[:8]}.txt", "w") as f:
     f.write(output_str)
 
 # %%
