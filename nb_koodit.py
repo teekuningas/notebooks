@@ -97,9 +97,9 @@ for rec_idx, (meta, text) in enumerate(contents):
 
                 # Define the instruction for the first step:
                 instruction = """
-                Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä teemat ja käsitteet.
+                Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä teemat ja käsitteet ja muodostaa niistä koodikirja.
 
-                Muodosta näistä teemoista koodikirja. Jokaisella koodilla tulee olla perustelu.
+                Perustele selkeästi jokaiselle koodille erikseen millä tavoin se ilmenee tekstissä.
 
                 Vältä lyhenteitä.
 

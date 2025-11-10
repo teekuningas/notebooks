@@ -101,6 +101,8 @@ for rec_idx, (meta, text) in enumerate(contents):
 
                 Perustele selkeästi jokaiselle merkitykselle erikseen millä tavoin se ilmenee tekstissä.
 
+                Vältä lyhenteitä.
+
                 Vastaa suomeksi.
                 """
 
