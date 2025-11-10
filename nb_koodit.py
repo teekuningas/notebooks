@@ -27,6 +27,8 @@ contents = read_interview_data("data/birdinterview", "observation")
 # And filter to a sensible subset
 contents = filter_interview_simple(contents)
 
+contents = contents[:5]
+
 # Convert to (rec_id, content) tuples for now
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
@@ -77,56 +79,60 @@ output_format = {
 # For every text, generate {n_iter} codebooks. 
 n_iter = 1
 
-codelists = []
-for idx, (rec_id, text) in enumerate(contents):
-    print(f"Generating codebook {idx+1} for {rec_id}..")
-    subresults = []
-    for idx in range(n_iter):
+codes = []
+for rec_idx, (rec_id, text) in enumerate(contents):
+    print(f"Generating codebook {rec_idx+1} for {rec_id}..")
+    for iter_idx in range(n_iter):
+        seed = iter_idx + 1
 
-        # It is easier for llms to do the codebook in two steps: first request a free-formatted codebook and then request it in the correct format. 
-        # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
+        while True: # Retry indefinitely until success
+            try:
+                # It is easier for llms to do the codebook in two steps: first request a free-formatted codebook and then request it in the correct format. 
+                # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
 
-        # Define the instruction for the first step:
-        instruction = """
-        Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä keskeiset teemat ja käsitteet.
+                # Define the instruction for the first step:
+                instruction = """
+                Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä teemat ja käsitteet.
 
-        Muodosta näistä teemoista koodikirja. Jokaisella koodilla tulee olla perustelu.
+                Muodosta näistä teemoista koodikirja. Jokaisella koodilla tulee olla perustelu.
 
-        Koodien tulisi olla kuvaavia, yleiskielisiä substantiiveja. Vältä lyhenteitä.
+                Vältä lyhenteitä.
 
-        Vastaa suomeksi.
-        """ 
-        
-        # Generate the intermediate result using the text, the instruction and a unique seed (to get a different result each time):
-        result = generate_simple(instruction, text, seed=idx, provider="llamacpp")
+                Vastaa suomeksi.
+                """ 
+                
+                # Generate the intermediate result using the text, the instruction and a unique seed (to get a different result each time):
+                result = generate_simple(instruction, text, seed=seed, provider="llamacpp", timeout=300)
 
-        # Extract the result
-        content = result
+                # Extract the result
+                content = result
 
-        # Define the instruction for the formatting task: 
-        instruction = """
-        Muotoile annettu vapaamuotoinen koodikirja pyydettyyn JSON-muotoon.
-        """
+                # Define the instruction for the formatting task: 
+                instruction = """
+                Muotoile annettu vapaamuotoinen koodikirja pyydettyyn JSON-muotoon.
+                """
 
-        # Generate the machine-readable result:
-        result = generate_simple(instruction, content, seed=10, output_format=output_format, provider="llamacpp")
+                # Generate the machine-readable result:
+                result = generate_simple(instruction, content, seed=10, output_format=output_format, provider="llamacpp", timeout=300)
 
-        # Extract the machine-readable result.
-        codes = json.loads(result)['codes']
+                # Extract the machine-readable result.
+                generated_codes = json.loads(result)['codes']
 
-        # Store the single result.
-        subresults.append(codes)
+                # Store the single result.
+                for c in generated_codes:
+                    codes.append({
+                        "code": c["code"],
+                        "explanation": c["explanation"],
+                        "rec_id": rec_id,
+                        "iter_idx": iter_idx
+                    })
+                break  # Success, exit while loop
+            except Exception as e:
+                seed += 1
+                print(f"An error occurred: {e}. Retrying with new seed {seed}...")
 
-    # Store the results of all iterations of a single text.
-    codelists.append((rec_id, subresults))
-
-# Now codelists variable includes {n_iter} codebooks for each of the texts. Print them to see.
-for rec_id, subresults in codelists:
-    print(f"{rec_id}:\n")
-    for idx, codelist in enumerate(subresults):
-        print(f"Iteraatio {idx+1}\n")
-        pprint(codelist)
-        print("")
+# Now codes variable includes all code-explanation pairs from all texts and all iterations.
+pprint(codes)
 
 
 # %%
@@ -138,20 +144,13 @@ from llm import embed
 # 1) Flatten all the codebooks into a single list of codes
 # 2) The codes are embedded into a "semantic space" 
 # 3) The embedded codes are clustered (put into groups) and the smallest clusters are discarded. 
-# 4) The codes in a cluster are combined so that each cluster .
+# 4) The codes in a cluster are combined so that each cluster . 
 # This process allows us to find the most reliable codes of all texts. Of course, this has a trade-off and manual inspection is recommended.
-
-# First, flatten the codebooks into a single list of codes.
-codes = []
-for name, textvalues in codelists:
-    for iteration in textvalues:
-        for codedict in iteration:
-            codes.append(codedict['code'].replace("*", ""))
 
 # Embed each code into the "semantic space".
 vectors = []
 for code in codes:
-    result = embed(code, provider="llamacpp")
+    result = embed(code['code'].replace("*", ""), provider="llamacpp")
     vectors.append(result)
 
 print(f"{len(vectors)} codes embedded.")
@@ -193,7 +192,7 @@ def format_cluster_contents(clusters, codes):
     for cluster_id in sorted(cluster_dict.keys()):
         items = cluster_dict[cluster_id]
         html += f"<p><strong>Cluster {cluster_id}</strong> ({len(items)} items):<br>"
-        html += ", ".join(items)
+        html += ", ".join([item['code'] for item in items])
         html += "</p>"
     html += "</div>"
     return html
@@ -286,9 +285,9 @@ code_clusters = sorted([cluster[1] for cluster in cluster_dict.items()], key=lam
 # Write all clusters to a file
 output_str = ""
 for idx, cluster in enumerate(code_clusters):
-    output_str += f"{idx+1}: {cluster}\n"
+    output_str += f"{idx+1}: {[item['code'] for item in cluster]}\n"
     
-with open(f"output/clusters_{str(uuid4())[:8]}.txt", "w") as f:
+with open(f"output/koodit_clusters_{str(uuid4())[:8]}.txt", "w") as f:
     f.write(output_str)
 
 # Discard smallest clusters (size < {min_size})
@@ -296,8 +295,7 @@ code_clusters = [cluster for cluster in code_clusters if len(cluster) >= min_siz
 
 # Finally print the resulting clusters to check
 for idx, cluster in enumerate(code_clusters):
-    print(f"{idx+1}: {cluster}")
-
+    print(f"{idx+1}: {[item['code'] for item in cluster]}")
 
 # %%
 from llm import generate_simple
@@ -331,7 +329,7 @@ for idx, cluster in enumerate(code_clusters):
     """
 
     # For data, we set a comma-separated list of cluster elements.
-    data = ", ".join(cluster)
+    data = ", ".join([item['code'] for item in cluster])
 
     # Send the request to llm.
     result = generate_simple(instruction, data, seed=10, output_format=output_format, provider="llamacpp")
@@ -345,7 +343,7 @@ for idx, cluster in enumerate(code_clusters):
 # Print the final codebook and save to file.
 output_str = "Final codes:\n"
 for idx, code in enumerate(final_codes):
-    output_str += f"{idx+1}: {code} ({', '.join(code_clusters[idx])})\n"
+    output_str += f"{idx+1}: {code} ({', '.join([item['code'] for item in code_clusters[idx]])})\n"
 output_str += "\nIn a format for easy copying:\n"
 output_str += str(list(dict.fromkeys(reversed([codedict['code'] for codedict in final_codes]))))
 
@@ -353,5 +351,23 @@ print(output_str)
 
 with open(f"output/koodit_{str(uuid4())[:8]}.txt", "w") as f:
     f.write(output_str)
+
+# %%
+from uuid import uuid4
+
+# Create a summary document
+summary_str = ""
+for final_code, cluster in zip(final_codes, code_clusters):
+    summary_str += f"Code: {final_code['code']}\n"
+    summary_str += "-------------------------\n"
+    for item in cluster:
+        summary_str += f"  - Explanation: {item['explanation']}\n"
+        summary_str += f"    Rec ID: {item['rec_id']}, Iteration: {item['iter_idx']}\n"
+    summary_str += "\n"
+
+print(summary_str)
+
+with open(f"output/koodit_summary_{str(uuid4())[:8]}.txt", "w") as f:
+    f.write(summary_str)
 
 # %%

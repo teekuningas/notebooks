@@ -1,7 +1,7 @@
 import requests
 import json
 
-def generate_simple(instruction, content, model=None, seed=0, temperature=0.8, n_context=None, output_format=None, provider="ollama"):
+def generate_simple(instruction, content, model=None, seed=0, temperature=0.8, n_context=None, output_format=None, provider="ollama", timeout=None):
     # model = "mistral-large"
     # model = "deepseek-r1:70b"
     messages = [
@@ -18,14 +18,14 @@ def generate_simple(instruction, content, model=None, seed=0, temperature=0.8, n
     if provider == "llamacpp":
         if model is not None:
             print("warning: llamacpp does not respect the model parameter")
-        return generate_llamacpp(messages, model=model, seed=seed, temperature=temperature, output_format=output_format)
+        return generate_llamacpp(messages, model=model, seed=seed, temperature=temperature, output_format=output_format, timeout=timeout)
     elif provider == "ollama":
-        return generate_ollama(messages, model=model, seed=seed, temperature=temperature, n_context=n_context, output_format=output_format)
+        return generate_ollama(messages, model=model, seed=seed, temperature=temperature, n_context=n_context, output_format=output_format, timeout=timeout)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
 
-def generate_ollama(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_context=None, output_format=None):
+def generate_ollama(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_context=None, output_format=None, timeout=None):
     if n_context is None:
         n_context = 8192
         
@@ -47,7 +47,7 @@ def generate_ollama(messages, model="llama3.3:70b", seed=0, temperature=0.8, n_c
         "format": output_format
     }
 
-    response = requests.post(api_url, headers=headers, json=data) 
+    response = requests.post(api_url, headers=headers, json=data, timeout=timeout) 
     
     if response.status_code == 200:
         # Return the message content directly
@@ -109,7 +109,7 @@ def embed_llamacpp(prompt):
     else:
         response.raise_for_status()
 
-def generate_llamacpp(messages, model="gpt-3.5-turbo", seed=0, temperature=0.8, output_format=None):
+def generate_llamacpp(messages, model="gpt-3.5-turbo", seed=0, temperature=0.8, output_format=None, timeout=None):
     api_url = "http://localhost:8080/v1/chat/completions"
     headers = {
         "Content-Type": "application/json"
@@ -135,7 +135,7 @@ def generate_llamacpp(messages, model="gpt-3.5-turbo", seed=0, temperature=0.8, 
         elif output_format == 'json':
             data['response_format'] = {"type": "json_object"}
 
-    response = requests.post(api_url, headers=headers, json=data) 
+    response = requests.post(api_url, headers=headers, json=data, timeout=timeout) 
     
     if response.status_code == 200:
         response_json = response.json()

@@ -30,7 +30,7 @@ contents = filter_interview_simple(contents)
 # Convert to (rec_id, content) tuples for now
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
-contents = contents[:50]
+contents = contents[0:3]
 
 print(f"len(contents): {len(contents)}")
 
@@ -43,8 +43,11 @@ print(f"len(contents): {len(contents)}")
 import json
 import requests
 from pprint import pprint
+from uuid import uuid4
 
 from llm import generate_simple
+
+run_id = str(uuid4())[:8]
 
 # Now, generate a meaningbook for each text. To mitigate randomness, we actually generate multiple meaningbooks for each text, and afterwards combine all meaningbooks of all texts into one meaningbook with clustering.
 
@@ -77,53 +80,99 @@ output_format = {
 }
 
 # For every text, generate {n_iter} meaningbooks.
-n_iter = 1
+n_iter = 2
 
 meanings = []
 for rec_idx, (rec_id, text) in enumerate(contents):
     print(f"Generating meaningbook {rec_idx+1} for {rec_id}..")
     for iter_idx in range(n_iter):
+        seed = iter_idx + 1
 
-        # It is easier for llms to do the meaningbook in two steps: first request a free-formatted meaningbook and then request it in the correct format.
-        # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
+        while True: # Retry indefinitely until success
+            try:
+                # It is easier for llms to do the meaningbook in two steps: first request a free-formatted meaningbook and then request it in the correct format.
+                # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
 
-        # Define the instruction for the first step:
-        instruction = """
-        Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä kaikki emotionaaliset merkitykset.
+                # Define the instruction for the first step:
+                instruction = """
+                Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä kaikki emotionaaliset merkitykset.
 
-        Listaa emotionaaliset merkitykset. Jokaisella emotionaolisella merkityksella tulee olla perustelu.
+                Listaa emotionaaliset merkitykset. Jokaisella emotionaalisella merkityksellä tulee olla perustelu.
 
-        Vastaa suomeksi.
-        """
+                Vastaa suomeksi.
+                """
 
-        # Generate the intermediate result using the text, the instruction and a unique seed (to get a different result each time):
-        result = generate_simple(instruction, text, seed=iter_idx, provider="llamacpp")
+                # Generate the intermediate result using the text, the instruction and a unique seed (to get a different result each time):
+                result = generate_simple(instruction, text, seed=seed, provider="llamacpp", timeout=300)
 
-        # Extract the result
-        content = result
+                # Extract the result
+                content = result
 
-        # Define the instruction for the formatting task:
-        instruction = """
-        Muotoile annettu vapaamuotoinen emotionaalisista merkityksista koostuva lista pyydettyyn JSON-muotoon.
-        """
+                # Define the instruction for the formatting task:
+                instruction = """
+                Muotoile annettu vapaamuotoinen emotionaalisista merkityksista koostuva lista pyydettyyn JSON-muotoon.
+                """
 
-        # Generate the machine-readable result:
-        result = generate_simple(instruction, content, seed=10, output_format=output_format, provider="llamacpp")
+                # Generate the machine-readable result:
+                result = generate_simple(instruction, content, seed=10, output_format=output_format, provider="llamacpp", timeout=300)
 
-        # Extract the machine-readable result.
-        generated_meanings = json.loads(result)['meanings']
+                # Extract the machine-readable result.
+                generated_meanings = json.loads(result)['meanings']
 
-        # Store the single result.
-        for m in generated_meanings:
-            meanings.append({
-                "meaning": m["meaning"],
-                "explanation": m["explanation"],
-                "rec_id": rec_id,
-                "iter_idx": iter_idx
-            })
+                # Store the single result.
+                for m in generated_meanings:
+                    meanings.append({
+                        "meaning": m["meaning"],
+                        "explanation": m["explanation"],
+                        "rec_id": rec_id,
+                        "iter_idx": iter_idx
+                    })
+                break  # Success, exit while loop
+            except Exception as e:
+                seed += 1
+                print(f"An error occurred: {e}. Retrying with new seed {seed}...")
 
 # Now meanings variable includes all meaning-explanation pairs from all texts and all iterations.
-pprint(meanings)
+# Create a human-readable and machine-parsable raw output.
+from itertools import groupby
+from uuid import uuid4
+
+raw_output_str = ""
+preview_output_str = ""
+unique_rec_ids = sorted(list(set(m['rec_id'] for m in meanings)))
+
+for i, rec_id in enumerate(unique_rec_ids):
+    
+    # Filter meanings for the current rec_id
+    meanings_for_rec = [m for m in meanings if m['rec_id'] == rec_id]
+    
+    # Group by iteration index
+    meanings_by_iter = {k: list(v) for k, v in groupby(sorted(meanings_for_rec, key=lambda x: x['iter_idx']), key=lambda x: x['iter_idx'])}
+    
+    rec_str = f"Rec ID: {rec_id}\n"
+    rec_str += "-----------------\n"
+    
+    for iter_idx, items in sorted(meanings_by_iter.items()):
+        rec_str += f"Iter {iter_idx}:\n"
+        for item in items:
+            rec_str += f"  - Meaning: {item['meaning']}\n"
+            rec_str += f"    Explanation: {item['explanation']}\n"
+    rec_str += "\n"
+    
+    raw_output_str += rec_str
+    if i < 10:
+        preview_output_str += rec_str
+
+filename = f"merkitykset_raw_{run_id}.txt"
+if len(unique_rec_ids) > 10:
+    preview_output_str += f"\n... [Showing 10 of {len(unique_rec_ids)} records. Full content in 'output/{filename}']"
+
+# Print the preview to the notebook
+print(preview_output_str)
+
+# Write the full raw output to a file
+with open(f"output/{filename}", "w") as f:
+    f.write(raw_output_str)
 
 
 # %%
@@ -183,7 +232,7 @@ def format_cluster_contents(clusters, meanings):
     for cluster_id in sorted(cluster_dict.keys()):
         items = cluster_dict[cluster_id]
         html += f"<p><strong>Cluster {cluster_id}</strong> ({len(items)} items):<br>"
-        html += ", ".join(items)
+        html += ", ".join([item['meaning'] for item in items])
         html += "</p>"
     html += "</div>"
     return html
@@ -235,7 +284,7 @@ def update_plot(threshold):
     clusters = fcluster(Z, threshold, criterion='distance')
     n_clusters = len(np.unique(clusters))
     cluster_info.value = f"Number of clusters: {n_clusters}"
-    cluster_contents.value = format_cluster_contents(clusters, [m['meaning'] for m in meanings])
+    cluster_contents.value = format_cluster_contents(clusters, meanings)
     
     # Ensure proper layout
     plt.tight_layout()
@@ -251,11 +300,10 @@ display(widgets.VBox([
 ]))
 
 # %%
-from uuid import uuid4
 # Here we actually apply the threshold and create the clusters.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.28
+threshold = 0.20
 
 # Discard clusters with less than {min_size} elements.
 min_size = 2
@@ -278,7 +326,8 @@ output_str = ""
 for idx, cluster in enumerate(meaning_clusters):
     output_str += f"{idx+1}: {[item['meaning'] for item in cluster]}\n"
     
-with open(f"output/merkitykset_clusters_{str(uuid4())[:8]}.txt", "w") as f:
+filename = f"merkitykset_clusters_{run_id}.txt"
+with open(f"output/{filename}", "w") as f:
     f.write(output_str)
 
 # Discard smallest clusters (size < {min_size})
@@ -286,13 +335,14 @@ meaning_clusters = [cluster for cluster in meaning_clusters if len(cluster) >= m
 
 # Finally print the resulting clusters to check
 for idx, cluster in enumerate(meaning_clusters):
-    print(f"{idx+1}: {[item['meaning'] for item in cluster]}")
+    if idx < 10:
+        print(f"{idx+1}: {[item['meaning'] for item in cluster]}")
+
+if len(meaning_clusters) > 10:
+    print(f"\n... [Showing 10 of {len(meaning_clusters)} clusters. Full content in 'output/{filename}']")
 
 
 # %%
-from llm import generate_simple
-from uuid import uuid4
-
 # Now we have clusters, but we actually wanted a meaningbook. We will ask llm to pick or create a represenative meaning for each of the clusters.
 
 # Specify a machine-readable output format
@@ -317,7 +367,7 @@ for idx, cluster in enumerate(meaning_clusters):
     instruction = """
     Olet laadullisen tutkimuksen avustaja.
     Tehtäväsi on tiivistää lista samankaltaisia merkityksiä yhdeksi edustavaksi merkitykseksi.
-    Valitse olemassa olevista merkityksistä paras.
+    Valitse merkitykseksi joku listassa esiintyvista merkityksista.
     """
 
     # For data, we set a comma-separated list of cluster elements.
@@ -334,32 +384,48 @@ for idx, cluster in enumerate(meaning_clusters):
 
 # Print the final meaningbook and save to file.
 output_str = "Final meanings:\n"
+preview_str = "Final meanings:\n"
 for idx, meaning in enumerate(final_meanings):
-    output_str += f"{idx+1}: {meaning} ({', '.join([item['meaning'] for item in meaning_clusters[idx]])})\n"
+    line = f"{idx+1}: {meaning} ({', '.join([item['meaning'] for item in meaning_clusters[idx]])})\n"
+    output_str += line
+    if idx < 10:
+        preview_str += line
+
+filename = f"merkitykset_short_{run_id}.txt"
+if len(final_meanings) > 10:
+    preview_str += f"\n... [Showing 10 of {len(final_meanings)} meanings. Full content in 'output/{filename}']"
+
 output_str += "\nIn a format for easy copying:\n"
 output_str += str(list(dict.fromkeys(reversed([meaningdict['meaning'] for meaningdict in final_meanings]))))
 
-print(output_str)
+print(preview_str)
 
-with open(f"output/merkitykset_{str(uuid4())[:8]}.txt", "w") as f:
+with open(f"output/{filename}", "w") as f:
     f.write(output_str)
 
 # %%
-from uuid import uuid4
-
 # Create a summary document
 summary_str = ""
-for final_meaning, cluster in zip(final_meanings, meaning_clusters):
-    summary_str += f"Meaning: {final_meaning['meaning']}\n"
-    summary_str += "-------------------------\n"
+preview_summary_str = ""
+for idx, (final_meaning, cluster) in enumerate(zip(final_meanings, meaning_clusters)):
+    cluster_summary = f"Meaning: {final_meaning['meaning']}\n"
+    cluster_summary += "-------------------------\n"
     for item in cluster:
-        summary_str += f"  - Explanation: {item['explanation']}\n"
-        summary_str += f"    Rec ID: {item['rec_id']}, Iteration: {item['iter_idx']}\n"
-    summary_str += "\n"
+        cluster_summary += f"  - Explanation: {item['explanation']}\n"
+        cluster_summary += f"    Rec ID: {item['rec_id']}, Iteration: {item['iter_idx']}\n"
+    cluster_summary += "\n"
+    
+    summary_str += cluster_summary
+    if idx < 10:
+        preview_summary_str += cluster_summary
 
-print(summary_str)
+filename = f"merkitykset_summary_{run_id}.txt"
+if len(final_meanings) > 10:
+    preview_summary_str += f"\n... [Showing 10 of {len(final_meanings)} summaries. Full content in 'output/{filename}']"
 
-with open(f"output/merkitykset_summary_{str(uuid4())[:8]}.txt", "w") as f:
+print(preview_summary_str)
+
+with open(f"output/{filename}", "w") as f:
     f.write(summary_str)
 
 # %%
