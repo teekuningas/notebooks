@@ -21,36 +21,7 @@ from utils import strip_webvtt_to_plain_text
 from utils import filter_interview_simple
 
 # Define the codes that are used
-codes = [
-    'Luonto', 'Ympäristö', 'Rauha', 'Eläimet', 'Linnut', 'Metsä', 'Sää', 'Äänet', 'Eläimistö', 'Kasvillisuus', 'Rentoutuminen', 'Kauneus', 'Kasvit', 
-    'Rauhallisuus', 'Lintujen laulu', 'Paikka', 'Maisema', 'Kiitollisuus', 'Tunteet', 'Ilmasto', 'Tunnelma', 'Hiljaisuus', 'Yksinäisyys', 'Ympäristönsuojelu', 
-    'Kesä', 'Järvi', 'Luonnonkauneus', 'Havainto', 'Perhe', 'Muistot', 'Hyvinvointi', 'Tuoksu', 'Mökki', 'Teknologia', 'Aistimukset', 'Toiminta', 
-    'Monimuotoisuus', 'Yhteys luontoon', 'Havainnointi', 'Aika', 'Puut', 'Liikkuminen', 'Muutos', 'Rauhoittuminen', 'Vesistö', 'Luontokokemus', 'Vapaus', 
-    'Luontosuhde', 'Sijainti', 'Turvallisuus', 'Vapaa-aika', 'Maaseutu', 'Lintu', 'Kaupunki', 'Sovellus', 'Haju', 'Henkilökohtainen kokemus', 'Luontoympäristö', 
-    'Luonnon äänet', 'Harrastukset', 'Hyönteiset', 'Pihatoiminta', 'Kaupunkiympäristö', 'Kävely', 'Pihapiiri', 'Tunnistaminen', 'Arvostus', 'Ilmapiiri', 
-    'Asuinpaikka', 'Liikenne', 'Henkinen hyvinvointi', 'Koti', 'Aistit', 'Ihminen', 'Vuodenaika', 'Ilo', 'Asuinalue', 'Vesi', 'Surullisuus', 'Lintujen tarkkailu', 
-    'Ranta', 'Tuoksut', 'Lintubongaus', 'Lintujen havainnointi ja hoito', 'Mökkiympäristö', 'Sääolosuhteet', 'Piha', 'Perinteet', 'Tyytyväisyys', 'Terveys ja hyvinvointi', 
-    'Puutarha', 'Paikallisuus', 'Puita', 'Aamu', 'Kokemus', 'Kotipiha', 'Rakkaus', 'Retkeily', 'Eläinten käyttäytyminen', 'Lintuharrastus', 'Elämänkierto', 'Yhteys', 
-    'Häiriö', 'Metsämaisema', 'Kalastus', 'Tietoisuus', 'Lapsuusmuistot', 'Värit', 'Ihminen ja luonto', 'Miellyttävyys', 'Hajut', 'Elämykset', 'Työ', 'Puisto', 'Lähiluonto', 
-    'Toive', 'Rakennus', 'Kausivaihtelut', 'Luonnon puhtaus', 'Valo', 'Pelko', 'Haikeus', 'Tunne', 'Äänimaisema', 'Onnellisuus', 'Ilmastonmuutos', 
-    'Maatalous', 'Lintutorni', 'Elämänhallinta', 'Lapsuus', 'Kokemukset', 'Luonnon havainnointi', 'Vastuu', 'Tarkkailu', 'Ääni', 'Aktiviteetti', 'Sääolot', 'Viihtyvyys', 
-    'Rakennukset', 'Stressi', 'Lehto', 'Metsänhoito', 'Takapiha', 'Omakotitalo', 'Kukat ja luonto', 'Tutkiminen', 'Saari', 'Tunnelmat', 'Säilyminen', 'Nautinto', 'Lajit', 
-    'Elämänarvo', 'Opiskelu', 'Virkistys', 'Tuho', 'Omatoimisuus', 'Kiinnostus', 'Melu', 'Ilmastointi', 'Luonnon merkitys', 'Kesäloma', 'Lintutunnistus', 'Tekoäly', 
-    'Linnusto', 'Kukat', 'Ilma', 'Elävöityminen', 'Ärsykkeet', 'Aistikokemus', 'Rentous', 'Tutkimus', 'Luonto ja eläimet', 'Kevät', 'Tontti', 'Sienet', 'Oppiminen', 
-    'Perinne', 'Rauha ja rentoutuminen', 'Kaipuu', 'Toivo', 'Henkilökohtainen merkitys', 'Luonnon läheisyys', 'Pesintä', 'Ympäristöhuoli', 'Henkilökohtainen kehitys', 
-    'Sienestys', 'Kesäilta', 'Kotoutuminen', 'Tulevaisuus', 'Ilon ja tyytyväisyyden tunne', 'Lintutarkkailu', 'Itsetietoisuus', 'Viestintä', 'Sukupolvet', 'Ulkonäkö', 
-    'Kuusi', 'Ystävyys', 'Hiekkatie', 'Luonnon kokemus', 'Pohjoismaat', 'Elämänlaatu', 'Pellot', 'Luonnonilmiöt', 'Huoli', 'Näkymä', 'Voima', 'Joutsenet', 'Uiminen', 
-    'Vene', 'Aistimus', 'Perhoset', 'Lampi', 'Puutarhatyöt', 'Kotiseutu', 'Hiljentyminen', 'Ilmanlaatu', 'Näkyvyys', 'Maantiede', 'Sosiaalinen vuorovaikutus', 'Luonnon ominaisuudet', 
-    'Kaavoitus', 'Säänolot', 'Talousmetsä', 'Rauha ja tyyneys', 'Vuorovaikutus', 'Rakennelmat', 'Kaupunkiluonto', 'Ilahduttavuus', 'Tiede', 'Marjat', 'Lämpötila', 
-    'Luontoäänet', 'Laituri', 'Luontokuvaus', 'Opettaminen', 'Uhka', 'Rantakasvillisuus', 'Suojeleminen', 'Meri', 'Elämän jatkuvuus', 'Tunteet ja ajatukset', 'Maasto', 
-    'Positiiviset ajatukset', 'Havainnot', 'Joki', 'Mökilläolo', 'Mökkikokemus', 'Tuuli', 'Rakennettu ympäristö', 'Kesäaamu', 'Näköala', 'Erämaa', 'Geologia', 'Jokimaisema', 
-    'Vuodenaikojen vaihtelu', 'Uimaranta', 'Niitty', 'Luontopolku', 'Sesonki', 'Hauskuus', 'Elämys', 'Ääntäminen', 'Tapahtumat', 'Asutus', 'Ilta', 'Perspektiivi', 'Alue', 
-    'Syksy', 'Luonnonpuisto', 'Identiteetti', 'Asuinympäristö', 'Kasvisto', 'Järvet', 'Hengellisyys', 'Aurinko', 'Nuotio', 'Kesämökki', 'Elämänreflektio', 'Mökkiloma', 
-    'Terapia', 'Ero kaupungista', 'Lomapaikka', 'Kaupunki vs. Maaseutu', 'Ihmiset', 'Kotiympäristö', 'Terassi', 'Ajan kuluminen', 'Hyöty', 'Omaisuus', 'Tuntu', 'Metsäkävely', 
-    'Tila', 'Suojelu', 'Maaseutuelämä', 'Rantaelämä'
-]
-
-codes = ['Hengellisyys'] 
+codes = ['Rauha', 'Ilo', 'Huoli', 'Yhteys luontoon', 'Nostalgia', 'Turvallisuus', 'Vapaus', 'Ylpeys', 'Kaipuu', 'Uteliaisuus']
 
 # And read the texts of interest from the file system
 #contents = read_files(folder="data/linnut", prefix="nayte")
@@ -64,7 +35,7 @@ contents = [(meta["rec_id"], text) for meta, text in contents]
 
 ## First a smaller sample
 #codes = codes[:20]
-#contents = contents[:50]
+contents = contents[:50]
 
 print(f"len(contents): {len(contents)}")
 print(f"len(codes): {len(codes)}")
@@ -105,7 +76,7 @@ for idx, (fname, text) in enumerate(contents):
         idx = 0
         seed = 0
         while idx < n_iter:
-            # It is easier for llms to do the codebook in two steps: first request a free-formatted codebook and then request it in the correct format. 
+            # It is easier for llms to do the decision in two steps: first request a free-formatted answer and then request it in the correct format. 
             # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
 
             # Define the instructions for the first, free-form step.
@@ -158,8 +129,11 @@ for idx, (fname, text) in enumerate(contents):
 # %%
 import pandas as pd
 from uuid import uuid4
+import os
 
 # Here we use pandas to construct a simple colored table out of the results.
+
+run_id = str(uuid4())[:8]
 
 # Create a dictionary to store the results
 transformed_data = {}
@@ -188,12 +162,16 @@ for fname in transformed_data:
 df = pd.DataFrame.from_dict(transformed_data, orient='index')
 
 # Save the DataFrame with values between 0 and 1
-df.to_csv(f"output/themes_{len(codes)}x{len(contents)}_{str(uuid4())[:8]}.csv")
+output_dir = f"output/analyysi_koodit/{run_id}"
+os.makedirs(output_dir, exist_ok=True)
+filename = f"{output_dir}/koodit_{len(codes)}x{len(contents)}.csv"
+df.to_csv(filename)
 
 # Add averages and format for visualization
-df['total'] = df.mean(axis=1)
-df.loc['total'] = df.mean()
-df = df.round(2) * 100
+df_display = df.copy()
+df_display['total'] = df_display.mean(axis=1)
+df_display.loc['total'] = df_display.mean()
+df_display = df_display.round(2) * 100
 
 # Define the styling function
 def color_high_values(val):
@@ -201,7 +179,9 @@ def color_high_values(val):
     return color
 
 # Apply the styling
-styled_df = df.style.map(color_high_values).format("{:.2f}")
+styled_df = df_display.style.map(color_high_values).format("{:.2f}")
+
+print(f"Results saved to: {filename}")
 
 # Display the styled DataFrame
 styled_df

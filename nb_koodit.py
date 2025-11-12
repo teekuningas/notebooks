@@ -28,7 +28,7 @@ contents = read_interview_data("data/birdinterview", "observation")
 # And filter to a sensible subset
 contents = filter_interview_simple(contents)
 
-contents = contents[:3]
+#contents = contents[:10]
 
 rec_id_map = {meta['rec_id']: str(uuid4()) for meta, _ in contents}
 for meta, text in contents:
@@ -82,7 +82,7 @@ output_format = {
 }
 
 # For every text, generate {n_iter} codebooks. 
-n_iter = 2
+n_iter = 1
 
 codes = []
 for rec_idx, (meta, text) in enumerate(contents):

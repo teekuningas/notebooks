@@ -14,9 +14,9 @@
 # ---
 
 # %% [markdown]
-# # Theme Maps
+# # Code Maps
 #
-# This notebook creates maps from observations and their themes, focusing on creating visually appealing, presentation-ready outputs.
+# This notebook creates maps from observations and their codes, focusing on creating visually appealing, presentation-ready outputs.
 
 # %%
 import pandas as pd
@@ -29,9 +29,8 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
 # --- Configuration ---
-theme_path = 'output/themes_1x50_f60ef36f.csv'
+codes_path = 'output/analyysi_koodit/12345678/koodit_10x50.csv'  # Update this path to your actual codes file
 metadata_path = '/home/user/bird-metadata/recs_since_June25.csv'
-output_dir = 'output/maps'
 # ---------------------
 
 def to_pastel_color(h, s=0.5, l=0.85):
@@ -53,12 +52,12 @@ def sanitize_filename(name):
     name = name.replace(' ', '_')
     return name
 
-def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filename, grid_size=20, projection='EPSG:3067'):
+def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename, grid_size=20, projection='EPSG:3067'):
     """
-    Generates a grid-based map for a given theme, coloring cells by the ratio of presence.
+    Generates a grid-based map for a given code, coloring cells by the ratio of presence.
     """
-    if not pd.api.types.is_numeric_dtype(gdf[theme_name]):
-        print(f"Skipping non-numeric theme '{theme_name}'")
+    if not pd.api.types.is_numeric_dtype(gdf[code_name]):
+        print(f"Skipping non-numeric code '{code_name}'")
         return
 
     # 1. Reproject all data
@@ -87,7 +86,7 @@ def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filenam
     joined = gpd.sjoin(gdf, grid, how='inner', predicate='within')
 
     # 4. Calculate presence ratio for each grid cell
-    grouped = joined.groupby('index_right')[theme_name].agg(
+    grouped = joined.groupby('index_right')[code_name].agg(
         present_count=lambda x: (x > 0).sum(),
         total_count='count'
     ).reset_index()
@@ -123,7 +122,7 @@ def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filenam
     grid_with_data.plot(column='ratio', cmap=pastel_cmap, linewidth=0.5, ax=ax, edgecolor='white', vmin=0, vmax=1)
 
     ax.set_axis_off()
-    plt.title(f"Teeman '{theme_name}' yleisyys", fontsize=16, pad=10)
+    plt.title(f"Koodin '{code_name}' yleisyys", fontsize=16, pad=10)
 
     # Add a colorbar
     sm = plt.cm.ScalarMappable(cmap=pastel_cmap, norm=plt.Normalize(vmin=0, vmax=1))
@@ -136,17 +135,19 @@ def plot_theme_map(gdf, finland_shape, maakuntarajat, theme_name, output_filenam
 
 
 # --- Data Loading ---
+from uuid import uuid4
+
 try:
-    themes = pd.read_csv(theme_path, index_col=0)
+    codes = pd.read_csv(codes_path, index_col=0)
     recs = pd.read_csv(metadata_path)
-    theme_names = list(themes.columns)
+    code_names = list(codes.columns)
 except FileNotFoundError as e:
     print(f"Error loading data: {e}")
     print("Please make sure the data files are in the correct directory.")
-    theme_names = [] # Ensure theme_names is defined
+    code_names = [] # Ensure code_names is defined
 
-if theme_names:
-    merged_data = pd.merge(themes, recs, left_index=True, right_on='rec_id')
+if code_names:
+    merged_data = pd.merge(codes, recs, left_index=True, right_on='rec_id')
     geometry = [Point(xy) for xy in zip(merged_data['lon'], merged_data['lat'])]
     gdf = gpd.GeoDataFrame(merged_data, geometry=geometry, crs="EPSG:4326")
 
@@ -155,17 +156,17 @@ if theme_names:
 
     maakuntarajat = gpd.read_file('geo/maakuntarajat.json')
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    run_id = str(uuid4())[:8]
+    output_dir = f'output/analyysi_koodikartat/{run_id}'
+    os.makedirs(output_dir, exist_ok=True)
 
-    for theme in theme_names:
-        safe_theme_name = sanitize_filename(theme)
-        print(f"Generating map for theme: {theme}...")
-        theme_dir = os.path.join(output_dir, safe_theme_name)
-        if not os.path.exists(theme_dir):
-            os.makedirs(theme_dir)
+    for code in code_names:
+        safe_code_name = sanitize_filename(code)
+        print(f"Generating map for code: {code}...")
+        code_dir = os.path.join(output_dir, safe_code_name)
+        os.makedirs(code_dir, exist_ok=True)
 
-        plot_theme_map(gdf, finland_shape, maakuntarajat, theme, os.path.join(theme_dir, f'{safe_theme_name}_grid.png'))
+        plot_code_map(gdf, finland_shape, maakuntarajat, code, os.path.join(code_dir, f'{safe_code_name}_grid.png'))
 
     print(f"\nMaps generated in the '{output_dir}' directory.")
 

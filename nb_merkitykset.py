@@ -28,7 +28,7 @@ contents = read_interview_data("data/birdinterview", "observation")
 # And filter to a sensible subset
 contents = filter_interview_simple(contents)
 
-contents = contents[0:3]
+#contents = contents[0:50]
 
 rec_id_map = {meta['rec_id']: str(uuid4()) for meta, _ in contents}
 for meta, text in contents:
@@ -82,7 +82,7 @@ output_format = {
 }
 
 # For every text, generate {n_iter} meaningbooks.
-n_iter = 2
+n_iter = 1
 
 meanings = []
 for rec_idx, (meta, text) in enumerate(contents):
@@ -175,7 +175,7 @@ import os
 # Here we actually apply the threshold, create the clusters, and generate a representative meaning for each.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.20
+threshold = 0.23
 
 # Discard clusters with less than {min_size} elements.
 min_size = 2
