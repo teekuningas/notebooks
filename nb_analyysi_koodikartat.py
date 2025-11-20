@@ -29,7 +29,7 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
 # --- Configuration ---
-codes_path = 'output/analyysi_koodit/12345678/koodit_10x50.csv'  # Update this path to your actual codes file
+codes_path = 'output/analyysi_koodit/91a63520/koodit_16x452.csv'
 metadata_path = '/home/user/bird-metadata/recs_since_June25.csv'
 # ---------------------
 

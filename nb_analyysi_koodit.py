@@ -21,7 +21,8 @@ from utils import strip_webvtt_to_plain_text
 from utils import filter_interview_simple
 
 # Define the codes that are used
-codes = ['Rauha', 'Ilo', 'Huoli', 'Yhteys luontoon', 'Nostalgia', 'Turvallisuus', 'Vapaus', 'Ylpeys', 'Kaipuu', 'Uteliaisuus']
+#codes = ['Rauha', 'Ilo', 'Huoli', 'Yhteys luontoon', 'Nostalgia', 'Turvallisuus', 'Vapaus', 'Ylpeys', 'Kaipuu', 'Uteliaisuus']
+codes = ['Luonto', 'Rauhallisuus', 'Ympäristönsuojelu', 'Sää', 'Rentoutuminen', 'Eläimistö', 'Äänet', 'Linnut', 'Luonnon monimuotoisuus', 'Luontosuhde', 'Yksinäisyys', 'Kiitollisuus', 'Havainnointi', 'Kasvillisuus', 'Metsä', 'Vesi']
 
 # And read the texts of interest from the file system
 #contents = read_files(folder="data/linnut", prefix="nayte")
@@ -35,7 +36,7 @@ contents = [(meta["rec_id"], text) for meta, text in contents]
 
 ## First a smaller sample
 #codes = codes[:20]
-contents = contents[:50]
+#contents = contents[:50]
 
 print(f"len(contents): {len(contents)}")
 print(f"len(codes): {len(codes)}")
