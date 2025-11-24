@@ -29,8 +29,19 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
 # --- Configuration ---
-codes_path = 'output/analyysi_koodit/91a63520/koodit_16x452.csv'
-metadata_path = '/home/user/bird-metadata/recs_since_June25.csv'
+# Choose which data to map:
+# - 'koodit': Thematic codes
+# - 'paikat': Location categories
+import os as _config_os
+data_type = _config_os.environ.get('MAP_TYPE', 'paikat')  # Default to 'paikat' (can be overridden with MAP_TYPE env var)
+
+# Data paths
+codes_path = 'koodidata/correlation-data/koodit_16x452.csv'
+paikat_path = 'koodidata/correlation-data/paikat_10x452.csv'
+metadata_path = 'koodidata/bird-metadata/recs_since_June25.csv'
+
+# PDF output configuration
+save_for_pdf = True  # Save maps to figures folder for PDF generation
 # ---------------------
 
 def to_pastel_color(h, s=0.5, l=0.85):
@@ -39,10 +50,9 @@ def to_pastel_color(h, s=0.5, l=0.85):
     r, g, b = [int(x * 255) for x in rgb]
     return f'#{r:02x}{g:02x}{b:02x}'
 
-def generate_greenish_pastel_colors(n=5):
-    base_hue = 0.33  # Green
-    single_pastel_color = to_pastel_color(base_hue, s=0.5, l=0.85)
-    return [single_pastel_color] * n
+def generate_neutral_background_colors(n=5):
+    """Generates a list of neutral light grey colors."""
+    return ['#f0f0f0'] * n
 
 def sanitize_filename(name):
     """Sanitizes a string to be used as a filename."""
@@ -70,7 +80,7 @@ def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename,
 
     # Generate pastel colors for maakuntarajat_clipped
     num_regions = len(maakuntarajat_clipped)
-    pastel_colors = generate_greenish_pastel_colors(num_regions)
+    pastel_colors = generate_neutral_background_colors(num_regions)
     maakuntarajat_clipped['color'] = pastel_colors
 
     # 2. Create a grid in the new projection
@@ -101,11 +111,12 @@ def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename,
     fig.patch.set_facecolor('white')
     ax.set_aspect('equal')
 
-    # Define a pastel colormap (blue -> off-white -> red)
-    pastel_cmap = LinearSegmentedColormap.from_list(
-        'pastel_map', 
-        [(0, '#6495ED'), (0.5, '#ffffef'), (1, '#FA8072')],
-        N=256
+
+
+    # Define a custom, light, diverging Purple-Green colormap
+    pastel_prgn_cmap = LinearSegmentedColormap.from_list(
+        'pastel_prgn_map',
+        ['#c2a5cf', '#f7f7f7', '#88d48a'] # Final Pastel Purple -> Off-White -> Stronger Pastel Green
     )
 
     # Base layer: Finland shape
@@ -119,13 +130,18 @@ def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename,
 
     # Plot grid cells with data on top
     grid_with_data = grid[grid['ratio'] != -1]
-    grid_with_data.plot(column='ratio', cmap=pastel_cmap, linewidth=0.5, ax=ax, edgecolor='white', vmin=0, vmax=1)
+
+    # Use TwoSlopeNorm to center the diverging map correctly on the 0-1 ratio data
+    from matplotlib.colors import TwoSlopeNorm
+    div_norm = TwoSlopeNorm(vmin=0, vcenter=0.5, vmax=1)
+
+    grid_with_data.plot(column='ratio', cmap=pastel_prgn_cmap, norm=div_norm, linewidth=0.5, ax=ax, edgecolor='white')
 
     ax.set_axis_off()
-    plt.title(f"Koodin '{code_name}' yleisyys", fontsize=16, pad=10)
+    plt.title(f"'{code_name}' yleisyys", fontsize=16, pad=10)
 
     # Add a colorbar
-    sm = plt.cm.ScalarMappable(cmap=pastel_cmap, norm=plt.Normalize(vmin=0, vmax=1))
+    sm = plt.cm.ScalarMappable(cmap=pastel_prgn_cmap, norm=div_norm)
     sm._A = [] # Fake up the array of the scalar mappable
     cbar = fig.colorbar(sm, ax=ax, shrink=0.6)
     cbar.set_label('Osuus')
@@ -138,13 +154,21 @@ def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename,
 from uuid import uuid4
 
 try:
-    codes = pd.read_csv(codes_path, index_col=0)
+    # Load data based on configuration
+    if data_type == 'paikat':
+        codes = pd.read_csv(paikat_path, index_col=0)
+        data_label = 'paikat'
+    else:
+        codes = pd.read_csv(codes_path, index_col=0)
+        data_label = 'koodit'
+    
     recs = pd.read_csv(metadata_path)
     code_names = list(codes.columns)
+    print(f"Loaded {len(code_names)} {data_label}: {', '.join(code_names)}")
 except FileNotFoundError as e:
     print(f"Error loading data: {e}")
     print("Please make sure the data files are in the correct directory.")
-    code_names = [] # Ensure code_names is defined
+    code_names = []
 
 if code_names:
     merged_data = pd.merge(codes, recs, left_index=True, right_on='rec_id')
@@ -156,18 +180,32 @@ if code_names:
 
     maakuntarajat = gpd.read_file('geo/maakuntarajat.json')
 
-    run_id = str(uuid4())[:8]
-    output_dir = f'output/analyysi_koodikartat/{run_id}'
-    os.makedirs(output_dir, exist_ok=True)
+    # Determine output directory
+    if save_for_pdf:
+        output_dir = 'output/figures_maps'
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Saving maps to figures directory: {output_dir}")
+    else:
+        run_id = str(uuid4())[:8]
+        output_dir = f'output/analyysi_koodikartat/{run_id}'
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Saving maps to: {output_dir}")
 
-    for code in code_names:
+    for i, code in enumerate(code_names, start=1):
         safe_code_name = sanitize_filename(code)
-        print(f"Generating map for code: {code}...")
-        code_dir = os.path.join(output_dir, safe_code_name)
-        os.makedirs(code_dir, exist_ok=True)
+        print(f"Generating map for {data_label}: {code}...")
+        
+        if save_for_pdf:
+            # Save directly to figures_maps with numbered prefix
+            output_file = os.path.join(output_dir, f'{i:02d}_kartta_{safe_code_name}.png')
+        else:
+            # Save to code-specific subdirectory
+            code_dir = os.path.join(output_dir, safe_code_name)
+            os.makedirs(code_dir, exist_ok=True)
+            output_file = os.path.join(code_dir, f'{safe_code_name}_grid.png')
+        
+        plot_code_map(gdf, finland_shape, maakuntarajat, code, output_file)
 
-        plot_code_map(gdf, finland_shape, maakuntarajat, code, os.path.join(code_dir, f'{safe_code_name}_grid.png'))
-
-    print(f"\nMaps generated in the '{output_dir}' directory.")
+    print(f"\nAll maps generated successfully!")
 
 # %%

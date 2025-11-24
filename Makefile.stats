@@ -1,0 +1,41 @@
+# Statistical analysis targets for notebooks
+
+# ═════════ Task Execution Targets ═════════
+# These targets run the Python scripts to generate image files.
+
+run-stats-both:
+	@echo "Generating statistics figures (both)..."
+	ANALYSIS_MODE=both python nb_stats_paikat_koodit.py
+
+run-stats-koodit:
+	@echo "Generating statistics figures (koodit only)..."
+	ANALYSIS_MODE=koodit python nb_stats_paikat_koodit.py
+
+run-stats-merkitykset:
+	@echo "Generating statistics figures (merkitykset only)..."
+	ANALYSIS_MODE=merkitykset python nb_stats_paikat_koodit.py
+
+run-maps:
+	@echo "Generating maps figures..."
+	MAP_TYPE=paikat python nb_stats_koodikartat.py
+
+# ═════════ PDF Generation Targets ═════════
+# These targets use the helper script to create PDFs with title pages.
+# They depend on the corresponding 'run-*' target.
+
+pdf-stats-both: run-stats-both
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_tilastot_both.pdf" "Koodit ja merkitykset paikan suhteen" "output/figures_paikat_both" 50
+
+pdf-stats-koodit: run-stats-koodit
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_tilastot_koodit.pdf" "Koodit paikan suhteen" "output/figures_paikat_koodit" 50
+
+pdf-stats-merkitykset: run-stats-merkitykset
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_tilastot_merkitykset.pdf" "Merkitykset paikan suhteen" "output/figures_paikat_merkitykset" 50
+
+pdf-maps: run-maps
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_kartat.pdf" "Paikkojen kartat" "output/figures_maps" 50
+
+# ═════════ PHONY Targets ═════════
+# Declare targets that are not actual files.
+
+.PHONY: run-stats-both run-stats-koodit run-stats-merkitykset run-maps pdf-stats-both pdf-stats-koodit pdf-stats-merkitykset pdf-maps

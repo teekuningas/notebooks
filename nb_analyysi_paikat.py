@@ -34,8 +34,8 @@ contents = filter_interview_simple(contents)
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
 ## First a smaller sample
-paikat = paikat[:2]
-contents = contents[:50]
+#paikat = paikat[:2]
+#contents = contents[:50]
 
 print(f"len(contents): {len(contents)}")
 print(f"len(paikat): {len(paikat)}")
@@ -67,7 +67,7 @@ output_format = {
 }
 
 # For every text and paikka, generate {n_iter} decisions.
-n_iter = 3
+n_iter = 2
 
 results = []
 for idx, (fname, text) in enumerate(contents):
