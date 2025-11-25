@@ -5,6 +5,7 @@ __pycache__
 data
 output
 koodidata
+inputs
 
 # notebooks are paired with .py files
 *.ipynb

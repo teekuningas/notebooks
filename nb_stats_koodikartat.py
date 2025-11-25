@@ -36,9 +36,9 @@ import os as _config_os
 data_type = _config_os.environ.get('MAP_TYPE', 'paikat')  # Default to 'paikat' (can be overridden with MAP_TYPE env var)
 
 # Data paths
-codes_path = 'koodidata/correlation-data/koodit_16x452.csv'
-paikat_path = 'koodidata/correlation-data/paikat_10x452.csv'
-metadata_path = 'koodidata/bird-metadata/recs_since_June25.csv'
+codes_path = 'inputs/correlation-data/koodit_16x452.csv'
+paikat_path = 'inputs/correlation-data/paikat_10x452.csv'
+metadata_path = 'inputs/bird-metadata/recs_since_June25.csv'
 
 # PDF output configuration
 save_for_pdf = True  # Save maps to figures folder for PDF generation

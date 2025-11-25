@@ -72,9 +72,9 @@ os.makedirs(output_dir, exist_ok=True)
 
 # %%
 # Load data
-locations_raw = pd.read_csv('./koodidata/correlation-data/paikat_10x452.csv', index_col=0)
-codes_raw = pd.read_csv('./koodidata/correlation-data/koodit_16x452.csv', index_col=0)
-meanings_raw = pd.read_csv('./koodidata/correlation-data/merkitykset_10x452.csv', index_col=0)
+locations_raw = pd.read_csv('./inputs/correlation-data/paikat_10x452.csv', index_col=0)
+codes_raw = pd.read_csv('./inputs/correlation-data/koodit_16x452.csv', index_col=0)
+meanings_raw = pd.read_csv('./inputs/correlation-data/merkitykset_10x452.csv', index_col=0)
 
 # Remove codes that duplicate location names
 codes_raw = codes_raw.drop(columns=['Metsä'], errors='ignore')
@@ -466,7 +466,7 @@ for loc, count in loc_counts.items():
 
 # %%
 # Save complete results
-output_file = f'./koodidata/correlation-data/chi_square_results_{OUTCOME_TYPE}.csv'
+output_file = f'./inputs/correlation-data/chi_square_results_{OUTCOME_TYPE}.csv'
 chi_square_df.to_csv(output_file, index=False)
 
 print("\n" + "=" * 70)
