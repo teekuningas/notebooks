@@ -13,9 +13,9 @@
 #     name: python3
 # ---
 
-# %% ═════════ Statistical Analysis: Paikat → Merkitykset ═════════
+# %% ═════════ Statistical Analysis: Bird Groups → Merkitykset ═════════
 #
-# Examines whether location categories (paikat) predict emotional meanings (merkitykset).
+# Examines whether bird families predict meaning themes (merkitykset).
 
 # %%
 import pandas as pd
@@ -49,19 +49,21 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-output_dir = './output/paikat_merkitykset'
+output_dir = './output/birds_merkitykset'
 os.makedirs(output_dir, exist_ok=True)
 
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-paikat_raw = pd.read_csv('./inputs/llm-thematic-data/paikat_10x452.csv', index_col=0)
+birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
+birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 merkitykset_raw = pd.read_csv('./inputs/llm-thematic-data/merkitykset_10x452.csv', index_col=0)
 
-predictor_binary = (paikat_raw == 1.0).astype(int)
-outcome_binary = (merkitykset_raw == 1.0).astype(int)
+common_ids = birds_raw.index.intersection(merkitykset_raw.index)
+predictor_binary = birds_raw.loc[common_ids].astype(int)
+outcome_binary = (merkitykset_raw.loc[common_ids] == 1.0).astype(int)
 
-print_data_summary(predictor_binary, outcome_binary, "Paikat", "Merkitykset")
+print_data_summary(predictor_binary, outcome_binary, "Bird groups", "Merkitykset")
 
 # %% ═════════ 2. Predictor Overlap ═════════
 
@@ -80,8 +82,8 @@ cooccurrence_matrix = calculate_cooccurrence_matrix(predictor_binary)
 
 plot_cooccurrence_heatmap(
     cooccurrence_matrix,
-    title=f'Paikkojen päällekkäisyys (n={len(predictor_binary)})',
-    xlabel='Paikka', ylabel='Paikka',
+    title=f'Lintuperheiden päällekkäisyys (n={len(predictor_binary)})',
+    xlabel='Lintuperhe', ylabel='Lintuperhe',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -89,8 +91,8 @@ plot_cooccurrence_heatmap(
 # Percentage heatmap
 plot_cooccurrence_percentage_heatmap(
     cooccurrence_matrix,
-    title='Paikkojen päällekkäisyys (%)',
-    xlabel='Paikka', ylabel='Paikka',
+    title='Lintuperheiden päällekkäisyys (%)',
+    xlabel='Lintuperhe', ylabel='Lintuperhe',
     output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -117,8 +119,8 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # %%
 plot_effect_size_heatmap(
     results_df,
-    title='Paikan vaikutus merkitykseen, efektikoko',
-    xlabel='Paikka',
+    title='Lintuperheen vaikutus merkitykseen, efektikoko',
+    xlabel='Lintuperhe',
     ylabel='Merkitys',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
@@ -150,7 +152,7 @@ else:
 # %%
 plot_top_associations_barplot(
     results_df,
-    title=f'Vahvimmat paikka-merkitys -yhteydet (V ≥ 0.1)',
+    title=f'Vahvimmat lintuperhe-merkitys -yhteydet (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
     figsize=STANDARD_FIGSIZE
@@ -220,7 +222,7 @@ results_df.to_csv(output_file, index=False)
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
 print("=" * 70)
-print(f"\nAnalyzed: Paikat × Merkitykset")
+print(f"\nAnalyzed: Bird groups × Merkitykset")
 print(f"Results: {output_file}")
 print(f"Figures: {output_dir}/")
 

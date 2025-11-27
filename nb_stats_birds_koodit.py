@@ -30,6 +30,7 @@ from utils_stats import (
     run_chi_square_tests,
     calculate_cooccurrence_matrix,
     plot_cooccurrence_heatmap,
+    plot_cooccurrence_percentage_heatmap,
     plot_effect_size_heatmap,
     plot_top_associations_barplot,
     print_summary_stats,
@@ -87,19 +88,14 @@ plot_cooccurrence_heatmap(
     figsize=STANDARD_FIGSIZE
 )
 
-# Conditional probabilities
-cooccurrence_pct = cooccurrence_matrix.div(cooccurrence_matrix.values.diagonal(), axis=0) * 100
-
-fig, ax = plt.subplots(figsize=STANDARD_FIGSIZE)
-sns.heatmap(cooccurrence_pct, annot=True, fmt='.0f', cmap='YlGn',
-            vmin=0, vmax=100, cbar_kws={'label': 'Osuus (%)'}, ax=ax)
-ax.set_title('Lintuperheiden päällekkäisyys (%)', fontsize=13, fontweight='bold', pad=20)
-ax.set_xlabel('Lintuperhe', fontsize=12, fontweight='bold')
-ax.set_ylabel('Lintuperhe', fontsize=12, fontweight='bold')
-plt.subplots_adjust(left=0.2, right=0.95, top=0.9, bottom=0.2)
-plt.savefig(f'{output_dir}/02_predictor_overlap_percentage.png', dpi=300, bbox_inches='tight')
-plt.show()
-plt.close()
+# Percentage heatmap
+plot_cooccurrence_percentage_heatmap(
+    cooccurrence_matrix,
+    title='Lintuperheiden päällekkäisyys (%)',
+    xlabel='Lintuperhe', ylabel='Lintuperhe',
+    output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
+    figsize=STANDARD_FIGSIZE
+)
 
 # %% ═════════ 3. Chi-Square Tests ═════════
 

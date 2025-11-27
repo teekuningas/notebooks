@@ -12,9 +12,21 @@ run-birds-koodit:
 	@echo "Generating Bird groups × Koodit analysis..."
 	python nb_stats_birds_koodit.py
 
+run-birds-merkitykset:
+	@echo "Generating Bird groups × Merkitykset analysis..."
+	python nb_stats_birds_merkitykset.py
+
 run-bird-presence-koodit:
 	@echo "Generating Bird presence × Koodit analysis..."
 	python nb_stats_bird_presence_koodit.py
+
+run-bird-presence-merkitykset:
+	@echo "Generating Bird presence × Merkitykset analysis..."
+	python nb_stats_bird_presence_merkitykset.py
+
+run-esa-paikat:
+	@echo "Generating ESA habitats × Paikat analysis..."
+	python nb_stats_esa_paikat.py
 
 pdf-paikat-koodit: run-paikat-koodit
 	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_paikat_koodit.pdf" "Paikat × Koodit" "output/paikat_koodit" 50
@@ -25,13 +37,19 @@ pdf-paikat-merkitykset: run-paikat-merkitykset
 pdf-birds-koodit: run-birds-koodit
 	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_birds_koodit.pdf" "Bird groups × Koodit" "output/birds_koodit" 50
 
+pdf-birds-merkitykset: run-birds-merkitykset
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_birds_merkitykset.pdf" "Bird groups × Merkitykset" "output/birds_merkitykset" 50
+
 pdf-bird-presence-koodit: run-bird-presence-koodit
 	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_presence_koodit.pdf" "Bird presence × Koodit" "output/bird_presence_koodit" 50
 
-run-all: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-bird-presence-koodit
+pdf-esa-paikat: run-esa-paikat
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_esa_paikat.pdf" "ESA habitats × Paikat" "output/esa_paikat" 50
+
+run-all: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-birds-merkitykset run-bird-presence-koodit run-bird-presence-merkitykset run-esa-paikat
 	@echo "✓ All analyses complete!"
 
-pdf-all: pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-bird-presence-koodit
+pdf-all: pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-birds-merkitykset pdf-bird-presence-koodit pdf-esa-paikat
 	@echo "✓ All PDFs generated!"
 
-.PHONY: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-bird-presence-koodit pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-bird-presence-koodit run-all pdf-all
+.PHONY: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-birds-merkitykset run-bird-presence-koodit run-esa-paikat pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-birds-merkitykset pdf-bird-presence-koodit pdf-esa-paikat run-all pdf-all

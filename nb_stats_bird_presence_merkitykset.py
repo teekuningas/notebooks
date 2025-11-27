@@ -13,9 +13,9 @@
 #     name: python3
 # ---
 
-# %% ═════════ Statistical Analysis: Bird Presence → Koodit ═════════
+# %% ═════════ Statistical Analysis: Bird Presence → Merkitykset ═════════
 #
-# Examines whether bird presence (any bird vs no birds) predicts thematic codes (koodit).
+# Examines whether bird presence (any bird vs no birds) predicts meanings (merkitykset).
 
 # %%
 import pandas as pd
@@ -49,7 +49,7 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-output_dir = './output/bird_presence_koodit'
+output_dir = './output/bird_presence_merkitykset'
 os.makedirs(output_dir, exist_ok=True)
 
 # %% ═════════ 1. Load and Prepare Data ═════════
@@ -63,14 +63,14 @@ birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 bird_presence = (birds_raw.sum(axis=1) > 0).astype(int).to_frame(name='Lintu')
 
 # Load outcomes
-koodit_raw = pd.read_csv('./inputs/llm-thematic-data/koodit_16x452.csv', index_col=0)
+merkitykset_raw = pd.read_csv('./inputs/llm-thematic-data/merkitykset_10x452.csv', index_col=0)
 
 # Align by rec_id
-common_ids = bird_presence.index.intersection(koodit_raw.index)
+common_ids = bird_presence.index.intersection(merkitykset_raw.index)
 predictor_binary = bird_presence.loc[common_ids]
-outcome_binary = (koodit_raw.loc[common_ids] == 1.0).astype(int)
+outcome_binary = (merkitykset_raw.loc[common_ids] == 1.0).astype(int)
 
-print_data_summary(predictor_binary, outcome_binary, "Linnun läsnäolo", "Koodit")
+print_data_summary(predictor_binary, outcome_binary, "Linnun läsnäolo", "Merkitykset")
 
 # %% ═════════ 2. Predictor Distribution ═════════
 
@@ -92,7 +92,6 @@ plot_binary_predictor_distribution(
     f'{output_dir}/01_bird_presence_distribution.png',
     figsize=STANDARD_FIGSIZE
 )
-
 
 # %% ═════════ 3. Chi-Square Tests ═════════
 
@@ -117,11 +116,10 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # Since we only have one predictor, create a custom bar plot instead of heatmap
 plot_binary_predictor_effects(
     results_df,
-    'Linnun läsnäolon vaikutus koodeihin (merkitsevät)',
+    'Linnun läsnäolon vaikutus merkityksiin (merkitsevät)',
     f'{output_dir}/02_effect_sizes.png',
     figsize=STANDARD_FIGSIZE
 )
-
 
 # %% ═════════ 5. Significant Associations ═════════
 
@@ -143,9 +141,9 @@ if len(significant) > 0:
         
         # Interpret direction
         if row['Difference'] > 0:
-            print(f"   → Koodi yleisempi kun lintu läsnä")
+            print(f"   → Merkitys yleisempi kun lintu läsnä")
         else:
-            print(f"   → Koodi yleisempi kun ei lintua")
+            print(f"   → Merkitys yleisempi kun ei lintua")
 else:
     print("Ei merkitseviä yhteyksiä.")
 
@@ -156,7 +154,7 @@ else:
 plot_binary_predictor_prevalence(
     results_df,
     'Lintu läsnä', 'Ei lintua',
-    'Koodien esiintyvyys linnun läsnäolon mukaan (top 15)',
+    'Merkitysten esiintyvyys linnun läsnäolon mukaan (top 15)',
     f'{output_dir}/03_prevalence_comparison.png',
     top_n=15,
     figsize=STANDARD_FIGSIZE
@@ -174,12 +172,12 @@ if len(sig_assocs) > 0:
     enriched = sig_assocs[sig_assocs['Difference'] > 0].sort_values('Cramers_V', ascending=False)
     depleted = sig_assocs[sig_assocs['Difference'] < 0].sort_values('Cramers_V', ascending=False)
     
-    print(f"\nKoodit jotka ovat yleisempiä KUN LINTU LÄSNÄ ({len(enriched)} kpl):")
+    print(f"\nMerkitykset jotka ovat yleisempiä KUN LINTU LÄSNÄ ({len(enriched)} kpl):")
     for _, row in enriched.iterrows():
         print(f"  {row['Outcome']:30s}  {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
               f"(V={row['Cramers_V']:.3f}, q={row['p_fdr']:.3f})")
     
-    print(f"\nKoodit jotka ovat yleisempiä KUN EI LINTUA ({len(depleted)} kpl):")
+    print(f"\nMerkitykset jotka ovat yleisempiä KUN EI LINTUA ({len(depleted)} kpl):")
     for _, row in depleted.iterrows():
         print(f"  {row['Outcome']:30s}  {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
               f"(V={row['Cramers_V']:.3f}, q={row['p_fdr']:.3f})")
@@ -193,7 +191,7 @@ results_df.to_csv(output_file, index=False)
 print("\n" + "=" * 70)
 print("ANALYYSI VALMIS")
 print("=" * 70)
-print(f"\nAnalysoitu: Linnun läsnäolo × Koodit")
+print(f"\nAnalysoitu: Linnun läsnäolo × Merkitykset")
 print(f"  Haastatteluja yhteensä: {len(predictor_binary)}")
 print(f"  Lintu läsnä: {n_with_bird} ({n_with_bird/len(predictor_binary)*100:.1f}%)")
 print(f"  Ei lintua: {n_without_bird} ({n_without_bird/len(predictor_binary)*100:.1f}%)")

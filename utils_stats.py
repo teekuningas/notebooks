@@ -194,15 +194,61 @@ def plot_cooccurrence_heatmap(cooccurrence_matrix, title, xlabel, ylabel,
         figsize: Figure dimensions
     """
     fig, ax = plt.subplots(figsize=figsize)
-    sns.heatmap(cooccurrence_matrix, annot=True, fmt='d', cmap='YlGn',
-                cbar_kws={'label': 'Yhteiset esiintymät'}, ax=ax)
+    hm = sns.heatmap(cooccurrence_matrix, annot=True, fmt='d', cmap='YlGn',
+                     cbar_kws={'label': ''}, ax=ax)
+    
+    # Style colorbar to match axis labels
+    cbar = hm.collections[0].colorbar
+    cbar.set_label('Yhteiset esiintymät', fontsize=12, labelpad=15)
     
     ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
-    ax.set_xlabel(xlabel, fontsize=12, fontweight='bold')
-    ax.set_ylabel(ylabel, fontsize=12, fontweight='bold')
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
     
-    plt.subplots_adjust(left=0.2, right=0.95, top=0.9, bottom=0.2)
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    # Rotate tick labels for readability
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90, va='top', ha='center')
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, ha='right')
+    
+    plt.subplots_adjust(left=0.25, right=0.95, top=0.9, bottom=0.2)
+    plt.savefig(output_path, dpi=300)
+    plt.show()
+    plt.close()
+
+
+def plot_cooccurrence_percentage_heatmap(cooccurrence_matrix, title, xlabel, ylabel,
+                                          output_path, figsize=(12, 9)):
+    """
+    Plot co-occurrence heatmap with conditional percentages.
+    Shows: P(column | row) = percentage of interviews with row feature that also have column feature.
+    
+    Args:
+        cooccurrence_matrix: Square DataFrame of co-occurrence counts
+        title: Plot title
+        xlabel, ylabel: Axis labels
+        output_path: Where to save figure
+        figsize: Figure dimensions
+    """
+    # Convert to conditional probabilities
+    cooccurrence_pct = cooccurrence_matrix.div(cooccurrence_matrix.values.diagonal(), axis=0) * 100
+    
+    fig, ax = plt.subplots(figsize=figsize)
+    hm = sns.heatmap(cooccurrence_pct, annot=True, fmt='.0f', cmap='YlGn',
+                     vmin=0, vmax=100, cbar_kws={'label': ''}, ax=ax)
+    
+    # Style colorbar to match axis labels
+    cbar = hm.collections[0].colorbar
+    cbar.set_label('Osuus (%)', fontsize=12, labelpad=15)
+    
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    
+    # Rotate tick labels for readability
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90, va='top', ha='center')
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, ha='right')
+    
+    plt.subplots_adjust(left=0.25, right=0.95, top=0.9, bottom=0.2)
+    plt.savefig(output_path, dpi=300)
     plt.show()
     plt.close()
 
@@ -229,10 +275,14 @@ def plot_effect_size_heatmap(results_df, title, xlabel, ylabel,
     
     # Plot
     fig, ax = plt.subplots(figsize=figsize)
-    sns.heatmap(pivot_cramers, annot=annot_matrix, fmt='', cmap='YlGn',
-                vmin=0, vmax=vmax, ax=ax,
-                cbar_kws={'label': "Cramérin V"},
-                yticklabels=True, annot_kws={'fontsize': 8})
+    hm = sns.heatmap(pivot_cramers, annot=annot_matrix, fmt='', cmap='YlGn',
+                     vmin=0, vmax=vmax, ax=ax,
+                     cbar_kws={'label': ''},
+                     yticklabels=True, annot_kws={'fontsize': 8})
+    
+    # Style colorbar to match axis labels
+    cbar = hm.collections[0].colorbar
+    cbar.set_label("Cramérin V", fontsize=12, labelpad=15)
     
     # Borders
     n_outcomes, n_predictors = pivot_cramers.shape
@@ -242,15 +292,148 @@ def plot_effect_size_heatmap(results_df, title, xlabel, ylabel,
     ax.axvline(x=n_predictors, color='k', linewidth=2)
     
     ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
-    ax.set_xlabel(xlabel, fontsize=12, fontweight='bold')
-    ax.set_ylabel(ylabel, fontsize=11, fontweight='bold')
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
     
     # Tick labels
     ax.set_yticklabels(ax.get_yticklabels(), rotation=0, ha='right', fontsize=9)
     ax.set_xticklabels(ax.get_xticklabels(), rotation=90, va='top', ha='center')
     
-    plt.subplots_adjust(left=0.2, right=0.95, top=0.9, bottom=0.2)
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.subplots_adjust(left=0.25, right=0.95, top=0.9, bottom=0.2)
+    plt.savefig(output_path, dpi=300)
+    plt.show()
+    plt.close()
+
+
+def plot_binary_predictor_distribution(predictor_binary, predictor_name, 
+                                       label_0, label_1, title, output_path,
+                                       figsize=(12, 9)):
+    """
+    Plot distribution of a binary predictor variable.
+    
+    Args:
+        predictor_binary: Binary DataFrame with one column
+        predictor_name: Name of the predictor column
+        label_0, label_1: Labels for 0 and 1 values
+        title: Plot title
+        output_path: Where to save figure
+        figsize: Figure dimensions
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    counts = predictor_binary[predictor_name].value_counts().sort_index()
+    bars = ax.bar([label_0, label_1], [counts[0], counts[1]], 
+                  color=['#e74c3c', '#2ecc71'], alpha=0.7, edgecolor='black', linewidth=1.5)
+    
+    # Add counts on bars
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{int(height)}\n({height/len(predictor_binary)*100:.1f}%)',
+                ha='center', va='bottom', fontsize=11, fontweight='bold')
+    
+    ax.set_ylabel('Haastattelujen määrä', fontsize=12)
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    plt.subplots_adjust(left=0.25, right=0.85, top=0.85, bottom=0.2)
+    plt.savefig(output_path, dpi=300)
+    plt.show()
+    plt.close()
+
+
+def plot_binary_predictor_effects(results_df, title, output_path,
+                                    figsize=(12, 9)):
+    """
+    Plot effect sizes for a binary predictor (horizontal bars).
+    
+    Args:
+        results_df: DataFrame from run_chi_square_tests()
+        title: Plot title
+        output_path: Where to save figure
+        figsize: Figure dimensions
+    """
+    significant = results_df[results_df['Significant']].copy()
+    significant = significant.sort_values('Cramers_V', ascending=True)
+    
+    if len(significant) == 0:
+        print("Ei merkitseviä yhteyksiä visualisoitavaksi.")
+        return
+    
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    y_pos = np.arange(len(significant))
+    colors = ['#2ecc71' if diff > 0 else '#e74c3c' 
+              for diff in significant['Difference']]
+    
+    bars = ax.barh(y_pos, significant['Cramers_V'], color=colors, alpha=0.7, 
+                   edgecolor='black', linewidth=0.5)
+    
+    # Add significance stars
+    for i, (_, row) in enumerate(significant.iterrows()):
+        stars = '***' if row['p_fdr'] < 0.001 else '**' if row['p_fdr'] < 0.01 else '*'
+        ax.text(row['Cramers_V'] + 0.01, i, stars, va='center', fontsize=10, fontweight='bold')
+    
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(significant['Outcome'])
+    ax.set_xlabel("Cramér's V (efektikoko)", fontsize=12)
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.axvline(x=0.1, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+    plt.subplots_adjust(left=0.25, right=0.85, top=0.85, bottom=0.2)
+    plt.savefig(output_path, dpi=300)
+    plt.show()
+    plt.close()
+
+
+def plot_binary_predictor_prevalence(results_df, label_pred, label_not_pred, 
+                                      title, output_path, top_n=15,
+                                      figsize=(12, 9)):
+    """
+    Plot prevalence comparison for binary predictor (grouped horizontal bars).
+    
+    Args:
+        results_df: DataFrame from run_chi_square_tests() 
+        label_pred: Label for predictor=1 condition
+        label_not_pred: Label for predictor=0 condition
+        title: Plot title
+        output_path: Where to save figure
+        top_n: Number of top associations to show
+        figsize: Figure dimensions
+    """
+    significant = results_df[results_df['Significant']].copy()
+    
+    if len(significant) == 0:
+        print("Ei merkitseviä yhteyksiä visualisoitavaksi.")
+        return
+    
+    top_n = min(top_n, len(significant))
+    top_sig = significant.nlargest(top_n, 'Cramers_V')
+    
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    y_pos = np.arange(len(top_sig))
+    width = 0.35
+    
+    with_pred = top_sig['P(Outcome|Pred)'].values
+    without_pred = top_sig['P(Outcome|~Pred)'].values
+    
+    bars1 = ax.barh(y_pos - width/2, with_pred, width, label=label_pred, 
+                    color='#2ecc71', alpha=0.7, edgecolor='black', linewidth=0.5)
+    bars2 = ax.barh(y_pos + width/2, without_pred, width, label=label_not_pred,
+                    color='#e74c3c', alpha=0.7, edgecolor='black', linewidth=0.5)
+    
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(top_sig['Outcome'])
+    ax.set_xlabel('Esiintyvyys (%)', fontsize=12)
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
+    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0., frameon=True, fancybox=True)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    plt.subplots_adjust(left=0.25, right=0.75, top=0.85, bottom=0.2)
+    plt.savefig(output_path, dpi=300)
     plt.show()
     plt.close()
 
@@ -314,8 +497,8 @@ def plot_top_associations_barplot(results_df, title, output_path,
     # Styling
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels, fontsize=10)
-    ax.set_xlabel('-log₁₀(FDR q-arvo)', fontsize=12, fontweight='bold')
-    ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+    ax.set_xlabel('-log₁₀(FDR q-arvo)', fontsize=12, labelpad=10)
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
     ax.axvline(1.3, color='gray', linestyle='--', linewidth=1, 
                alpha=0.7, label='q = 0.05')
     ax.legend(loc='lower right', fontsize=10)
@@ -326,10 +509,10 @@ def plot_top_associations_barplot(results_df, title, output_path,
     sm = plt.cm.ScalarMappable(cmap=plt.cm.PRGn, norm=norm)
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=ax, pad=0.01, aspect=30, shrink=0.8)
-    cbar.set_label('Erotus (%)', rotation=270, labelpad=15, fontsize=10)
+    cbar.set_label('Erotus (%)', rotation=270, labelpad=20, fontsize=12)
     
-    plt.subplots_adjust(left=0.2, right=0.95, top=0.9, bottom=0.2)
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.subplots_adjust(left=0.25, right=0.95, top=0.9, bottom=0.2)
+    plt.savefig(output_path, dpi=300)
     plt.show()
     plt.close()
 
