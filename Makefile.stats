@@ -1,41 +1,37 @@
 # Statistical analysis targets for notebooks
 
-# ═════════ Task Execution Targets ═════════
-# These targets run the Python scripts to generate image files.
+run-paikat-koodit:
+	@echo "Generating Paikat × Koodit analysis..."
+	python nb_stats_paikat_koodit.py
 
-run-stats-both:
-	@echo "Generating statistics figures (both)..."
-	ANALYSIS_MODE=both python nb_stats_paikat_koodit.py
+run-paikat-merkitykset:
+	@echo "Generating Paikat × Merkitykset analysis..."
+	python nb_stats_paikat_merkitykset.py
 
-run-stats-koodit:
-	@echo "Generating statistics figures (koodit only)..."
-	ANALYSIS_MODE=koodit python nb_stats_paikat_koodit.py
+run-birds-koodit:
+	@echo "Generating Bird groups × Koodit analysis..."
+	python nb_stats_birds_koodit.py
 
-run-stats-merkitykset:
-	@echo "Generating statistics figures (merkitykset only)..."
-	ANALYSIS_MODE=merkitykset python nb_stats_paikat_koodit.py
+run-bird-presence-koodit:
+	@echo "Generating Bird presence × Koodit analysis..."
+	python nb_stats_bird_presence_koodit.py
 
-run-maps:
-	@echo "Generating maps figures..."
-	MAP_TYPE=paikat python nb_stats_koodikartat.py
+pdf-paikat-koodit: run-paikat-koodit
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_paikat_koodit.pdf" "Paikat × Koodit" "output/paikat_koodit" 50
 
-# ═════════ PDF Generation Targets ═════════
-# These targets use the helper script to create PDFs with title pages.
-# They depend on the corresponding 'run-*' target.
+pdf-paikat-merkitykset: run-paikat-merkitykset
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_paikat_merkitykset.pdf" "Paikat × Merkitykset" "output/paikat_merkitykset" 50
 
-pdf-stats-both: run-stats-both
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_tilastot_both.pdf" "Koodit ja merkitykset paikan suhteen" "output/figures_paikat_both" 50
+pdf-birds-koodit: run-birds-koodit
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_birds_koodit.pdf" "Bird groups × Koodit" "output/birds_koodit" 50
 
-pdf-stats-koodit: run-stats-koodit
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_tilastot_koodit.pdf" "Koodit paikan suhteen" "output/figures_paikat_koodit" 50
+pdf-bird-presence-koodit: run-bird-presence-koodit
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_presence_koodit.pdf" "Bird presence × Koodit" "output/bird_presence_koodit" 50
 
-pdf-stats-merkitykset: run-stats-merkitykset
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_tilastot_merkitykset.pdf" "Merkitykset paikan suhteen" "output/figures_paikat_merkitykset" 50
+run-all: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-bird-presence-koodit
+	@echo "✓ All analyses complete!"
 
-pdf-maps: run-maps
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_kartat.pdf" "Paikkojen kartat" "output/figures_maps" 50
+pdf-all: pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-bird-presence-koodit
+	@echo "✓ All PDFs generated!"
 
-# ═════════ PHONY Targets ═════════
-# Declare targets that are not actual files.
-
-.PHONY: run-stats-both run-stats-koodit run-stats-merkitykset run-maps pdf-stats-both pdf-stats-koodit pdf-stats-merkitykset pdf-maps
+.PHONY: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-bird-presence-koodit pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-bird-presence-koodit run-all pdf-all

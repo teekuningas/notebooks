@@ -13,9 +13,9 @@
 #     name: python3
 # ---
 
-# %% ═════════ Statistical Analysis: Paikat → Koodit ═════════
+# %% ═════════ Statistical Analysis: Bird Groups → Koodit ═════════
 #
-# Examines whether location categories (paikat) predict thematic codes (koodit).
+# Examines whether bird families predict thematic codes (koodit).
 
 # %%
 import pandas as pd
@@ -48,20 +48,21 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-output_dir = './output/paikat_koodit'
+output_dir = './output/birds_koodit'
 os.makedirs(output_dir, exist_ok=True)
 
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-paikat_raw = pd.read_csv('./inputs/llm-thematic-data/paikat_10x452.csv', index_col=0)
+birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
+birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 koodit_raw = pd.read_csv('./inputs/llm-thematic-data/koodit_16x452.csv', index_col=0)
-koodit_raw = koodit_raw.drop(columns=['Metsä'], errors='ignore')
 
-predictor_binary = (paikat_raw == 1.0).astype(int)
-outcome_binary = (koodit_raw == 1.0).astype(int)
+common_ids = birds_raw.index.intersection(koodit_raw.index)
+predictor_binary = birds_raw.loc[common_ids].astype(int)
+outcome_binary = (koodit_raw.loc[common_ids] == 1.0).astype(int)
 
-print_data_summary(predictor_binary, outcome_binary, "Paikat", "Koodit")
+print_data_summary(predictor_binary, outcome_binary, "Bird groups", "Koodit")
 
 # %% ═════════ 2. Predictor Overlap ═════════
 
@@ -80,8 +81,8 @@ cooccurrence_matrix = calculate_cooccurrence_matrix(predictor_binary)
 
 plot_cooccurrence_heatmap(
     cooccurrence_matrix,
-    title=f'Paikkojen päällekkäisyys (n={len(predictor_binary)})',
-    xlabel='Paikka', ylabel='Paikka',
+    title=f'Lintuperheiden päällekkäisyys (n={len(predictor_binary)})',
+    xlabel='Lintuperhe', ylabel='Lintuperhe',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -92,9 +93,9 @@ cooccurrence_pct = cooccurrence_matrix.div(cooccurrence_matrix.values.diagonal()
 fig, ax = plt.subplots(figsize=STANDARD_FIGSIZE)
 sns.heatmap(cooccurrence_pct, annot=True, fmt='.0f', cmap='YlGn',
             vmin=0, vmax=100, cbar_kws={'label': 'Osuus (%)'}, ax=ax)
-ax.set_title('Paikkojen päällekkäisyys (%)', fontsize=13, fontweight='bold', pad=20)
-ax.set_xlabel('Paikka', fontsize=12, fontweight='bold')
-ax.set_ylabel('Paikka', fontsize=12, fontweight='bold')
+ax.set_title('Lintuperheiden päällekkäisyys (%)', fontsize=13, fontweight='bold', pad=20)
+ax.set_xlabel('Lintuperhe', fontsize=12, fontweight='bold')
+ax.set_ylabel('Lintuperhe', fontsize=12, fontweight='bold')
 plt.subplots_adjust(left=0.2, right=0.95, top=0.9, bottom=0.2)
 plt.savefig(f'{output_dir}/02_predictor_overlap_percentage.png', dpi=300, bbox_inches='tight')
 plt.show()
@@ -122,8 +123,8 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # %%
 plot_effect_size_heatmap(
     results_df,
-    title='Paikan vaikutus koodiin, efektikoko',
-    xlabel='Paikka',
+    title='Lintuperheen vaikutus koodiin, efektikoko',
+    xlabel='Lintuperhe',
     ylabel='Koodi',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
@@ -155,7 +156,7 @@ else:
 # %%
 plot_top_associations_barplot(
     results_df,
-    title=f'Vahvimmat paikka-koodi -yhteydet (V ≥ 0.1)',
+    title=f'Vahvimmat lintuperhe-koodi -yhteydet (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
     figsize=STANDARD_FIGSIZE
@@ -225,7 +226,7 @@ results_df.to_csv(output_file, index=False)
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
 print("=" * 70)
-print(f"\nAnalyzed: Paikat × Koodit")
+print(f"\nAnalyzed: Bird groups × Koodit")
 print(f"Results: {output_file}")
 print(f"Figures: {output_dir}/")
 

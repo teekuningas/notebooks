@@ -13,9 +13,9 @@
 #     name: python3
 # ---
 
-# %% ═════════ Statistical Analysis: Paikat → Koodit ═════════
+# %% ═════════ Statistical Analysis: Paikat → Merkitykset ═════════
 #
-# Examines whether location categories (paikat) predict thematic codes (koodit).
+# Examines whether location categories (paikat) predict emotional meanings (merkitykset).
 
 # %%
 import pandas as pd
@@ -48,20 +48,19 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-output_dir = './output/paikat_koodit'
+output_dir = './output/paikat_merkitykset'
 os.makedirs(output_dir, exist_ok=True)
 
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
 paikat_raw = pd.read_csv('./inputs/llm-thematic-data/paikat_10x452.csv', index_col=0)
-koodit_raw = pd.read_csv('./inputs/llm-thematic-data/koodit_16x452.csv', index_col=0)
-koodit_raw = koodit_raw.drop(columns=['Metsä'], errors='ignore')
+merkitykset_raw = pd.read_csv('./inputs/llm-thematic-data/merkitykset_10x452.csv', index_col=0)
 
 predictor_binary = (paikat_raw == 1.0).astype(int)
-outcome_binary = (koodit_raw == 1.0).astype(int)
+outcome_binary = (merkitykset_raw == 1.0).astype(int)
 
-print_data_summary(predictor_binary, outcome_binary, "Paikat", "Koodit")
+print_data_summary(predictor_binary, outcome_binary, "Paikat", "Merkitykset")
 
 # %% ═════════ 2. Predictor Overlap ═════════
 
@@ -122,9 +121,9 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # %%
 plot_effect_size_heatmap(
     results_df,
-    title='Paikan vaikutus koodiin, efektikoko',
+    title='Paikan vaikutus merkitykseen, efektikoko',
     xlabel='Paikka',
-    ylabel='Koodi',
+    ylabel='Merkitys',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
     vmax=0.4
@@ -155,7 +154,7 @@ else:
 # %%
 plot_top_associations_barplot(
     results_df,
-    title=f'Vahvimmat paikka-koodi -yhteydet (V ≥ 0.1)',
+    title=f'Vahvimmat paikka-merkitys -yhteydet (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
     figsize=STANDARD_FIGSIZE
@@ -225,7 +224,7 @@ results_df.to_csv(output_file, index=False)
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
 print("=" * 70)
-print(f"\nAnalyzed: Paikat × Koodit")
+print(f"\nAnalyzed: Paikat × Merkitykset")
 print(f"Results: {output_file}")
 print(f"Figures: {output_dir}/")
 

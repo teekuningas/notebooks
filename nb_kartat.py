@@ -14,32 +14,35 @@
 # ---
 
 # %% [markdown]
-# ## Joitakin pieniä karttaesimerkkejä
+# # Code Maps
+#
+# This notebook creates maps from observations and their codes, focusing on creating visually appealing, presentation-ready outputs.
 
 # %%
+import pandas as pd
 import geopandas as gpd
+from shapely.geometry import Point, Polygon
 import matplotlib.pyplot as plt
-
-# Let's draw a very simple map of Finland
-
-# Read the GeoJSON content into a GeoDataFrame
-world = gpd.read_file('geo/ne_50m_admin_0_countries.geojson')
-    
-# Filter for Finland using the appropriate column
-finland = world[world['name'] == "Finland"]
-
-# Plot Finland
-finland.plot()
-plt.title("Map of Finland")
-plt.show()
-
-# %%
-import geopandas as gpd
-import matplotlib.pyplot as plt
-import random
+import os
 import colorsys
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 
-# Let's draw a map of Finland subdivided to counties.
+# --- Configuration ---
+# Choose which data to map:
+# - 'koodit': Thematic codes
+# - 'paikat': Location categories
+import os as _config_os
+data_type = _config_os.environ.get('MAP_TYPE', 'paikat')  # Default to 'paikat' (can be overridden with MAP_TYPE env var)
+
+# Data paths
+codes_path = 'inputs/correlation-data/koodit_16x452.csv'
+paikat_path = 'inputs/correlation-data/paikat_10x452.csv'
+metadata_path = 'inputs/bird-metadata/recs_since_June25.csv'
+
+# PDF output configuration
+save_for_pdf = True  # Save maps to figures folder for PDF generation
+# ---------------------
 
 def to_pastel_color(h, s=0.5, l=0.85):
     # Convert HSL to RGB
@@ -47,274 +50,162 @@ def to_pastel_color(h, s=0.5, l=0.85):
     r, g, b = [int(x * 255) for x in rgb]
     return f'#{r:02x}{g:02x}{b:02x}'
 
-def generate_pastel_colors(n=5):
-    # Generate evenly spaced hues
-    hues = [i / n for i in range(n)]
-    pastel_colors = [to_pastel_color(h) for h in hues]
-    return pastel_colors
+def generate_neutral_background_colors(n=5):
+    """Generates a list of neutral light grey colors."""
+    return ['#f0f0f0'] * n
 
-# Load data into GeoDataFrame
-counties = gpd.read_file('geo/maakuntarajat.json')
+def sanitize_filename(name):
+    """Sanitizes a string to be used as a filename."""
+    name = name.lower()
+    name = name.replace('ä', 'a').replace('ö', 'o').replace('å', 'a')
+    name = "".join(c for c in name if c.isalnum() or c in (' ', '_')).rstrip()
+    name = name.replace(' ', '_')
+    return name
 
-# Create random pastel colors
-pastel_colors = generate_pastel_colors(len(counties))
-random.shuffle(pastel_colors)
-counties['color'] = [pastel_colors[i] for i in range(len(counties))]
+def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename, grid_size=20, projection='EPSG:3067'):
+    """
+    Generates a grid-based map for a given code, coloring cells by the ratio of presence.
+    """
+    if not pd.api.types.is_numeric_dtype(gdf[code_name]):
+        print(f"Skipping non-numeric code '{code_name}'")
+        return
 
-# Plot the counties with pastel colors
-fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-counties.plot(ax=ax, color=counties['color'], edgecolor='black')
+    # 1. Reproject all data
+    gdf = gdf.to_crs(projection)
+    finland_shape = finland_shape.to_crs(projection)
+    maakuntarajat = maakuntarajat.to_crs(projection)
 
-plt.title("Map of Finland")
-plt.show()
+    # Clip maakuntarajat to finland_shape to exclude water areas
+    maakuntarajat_clipped = gpd.overlay(maakuntarajat, finland_shape, how='intersection')
 
-# %%
-import geopandas as gpd
-import random
-import colorsys
-import folium
+    # Generate pastel colors for maakuntarajat_clipped
+    num_regions = len(maakuntarajat_clipped)
+    pastel_colors = generate_neutral_background_colors(num_regions)
+    maakuntarajat_clipped['color'] = pastel_colors
 
-def to_pastel_color(h, s=0.5, l=0.85):
-    rgb = colorsys.hls_to_rgb(h, l, s)
-    r, g, b = [int(x * 255) for x in rgb]
-    return f'#{r:02x}{g:02x}{b:02x}'
+    # 2. Create a grid in the new projection
+    xmin, ymin, xmax, ymax = finland_shape.total_bounds
+    cell_size = (xmax - xmin) / grid_size
+    grid_cells = []
+    for x in np.arange(xmin, xmax, cell_size):
+        for y in np.arange(ymin, ymax, cell_size):
+            grid_cells.append(Polygon([(x, y), (x + cell_size, y), (x + cell_size, y + cell_size), (x, y + cell_size)]))
+    grid = gpd.GeoDataFrame(grid_cells, columns=['geometry'], crs=projection)
 
-def generate_pastel_colors(n=5):
-    hues = [i / n for i in range(n)]  # Generate evenly spaced hues
-    pastel_colors = [to_pastel_color(h) for h in hues]
-    return pastel_colors
+    # 3. Spatially join data to the grid
+    joined = gpd.sjoin(gdf, grid, how='inner', predicate='within')
 
-# Let's draw counties overlaid to the folium default map (openstreetmap)
+    # 4. Calculate presence ratio for each grid cell
+    grouped = joined.groupby('index_right')[code_name].agg(
+        present_count=lambda x: (x > 0).sum(),
+        total_count='count'
+    ).reset_index()
+    grouped['ratio'] = grouped['present_count'] / grouped['total_count']
 
-# Load data into GeoDataFrame
-counties = gpd.read_file('geo/maakuntarajat.json')
+    # 5. Merge ratio back to the grid
+    grid = grid.merge(grouped, left_index=True, right_on='index_right', how='left')
+    grid['ratio'] = grid['ratio'].fillna(-1) # Use -1 for no data
 
-# Generate pastel colors and assign them to counties
-pastel_colors = generate_pastel_colors(len(counties))
-random.shuffle(pastel_colors)
-counties['color'] = pastel_colors  # Now ensure each county has a color
+    # 6. Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    fig.patch.set_facecolor('white')
+    ax.set_aspect('equal')
 
-# Convert GeoDataFrame to JSON, preserving selected properties, including 'color'
-counties_json = counties.to_json()
 
-# Create a folium map centered on Finland
-m = folium.Map(location=[64.9667, 25.6667], zoom_start=5, height=800, width=500)
 
-# Add counties to the map with hover effects
-geojson = folium.GeoJson(
-    counties_json,
-    style_function=lambda feature: {
-        'fillColor': feature['properties']['color'],  # Use color property
-        'color': 'black',
-        'weight': 0.1,
-        'fillOpacity': 0.2,
-    },
-    highlight_function=lambda feature: {
-        'weight': 1,
-    },
-    tooltip=folium.GeoJsonTooltip(fields=['NAMEFIN'])
-)
-geojson.add_to(m)
+    # Define a custom, light, diverging Purple-Green colormap
+    pastel_prgn_cmap = LinearSegmentedColormap.from_list(
+        'pastel_prgn_map',
+        ['#c2a5cf', '#f7f7f7', '#88d48a'] # Final Pastel Purple -> Off-White -> Stronger Pastel Green
+    )
 
-f = folium.Figure(height=800, width=500)
-m.add_to(f)
+    # Base layer: Finland shape
+    finland_shape.plot(ax=ax, color='#e0e0e0', edgecolor='#cccccc', linewidth=0.5)
 
-# Display the map
-m
+    # Overlay regional borders
+    maakuntarajat_clipped.plot(ax=ax, color=maakuntarajat_clipped['color'], edgecolor='#B0B0B0', linewidth=0.7, alpha=0.6)
 
-# %%
-import geopandas as gpd
-import random
-import colorsys
-import folium
+    # Plot the entire grid with a light background and outlines
+    grid.plot(ax=ax, color='none', edgecolor='white', linewidth=0.5)
 
-# Let's draw munincipalities overlaid to the folium default map (openstreetmap)
+    # Plot grid cells with data on top
+    grid_with_data = grid[grid['ratio'] != -1]
 
-def to_pastel_color(h, s=0.5, l=0.85):
-    rgb = colorsys.hls_to_rgb(h, l, s)
-    r, g, b = [int(x * 255) for x in rgb]
-    return f'#{r:02x}{g:02x}{b:02x}'
+    # Use TwoSlopeNorm to center the diverging map correctly on the 0-1 ratio data
+    from matplotlib.colors import TwoSlopeNorm
+    div_norm = TwoSlopeNorm(vmin=0, vcenter=0.5, vmax=1)
 
-def generate_pastel_colors(n=5):
-    hues = [i / n for i in range(n)]  # Generate evenly spaced hues
-    pastel_colors = [to_pastel_color(h) for h in hues]
-    return pastel_colors
+    grid_with_data.plot(column='ratio', cmap=pastel_prgn_cmap, norm=div_norm, linewidth=0.5, ax=ax, edgecolor='white')
 
-# Load data into GeoDataFrame
-muns = gpd.read_file('geo/kuntarajat.json')
+    ax.set_axis_off()
+    plt.title(f"'{code_name}' yleisyys", fontsize=16, pad=10)
 
-# Generate pastel colors and assign them to munincipalities
-pastel_colors = generate_pastel_colors(len(muns))
-random.shuffle(pastel_colors)
-muns['color'] = pastel_colors
+    # Add a colorbar
+    sm = plt.cm.ScalarMappable(cmap=pastel_prgn_cmap, norm=div_norm)
+    sm._A = [] # Fake up the array of the scalar mappable
+    cbar = fig.colorbar(sm, ax=ax, shrink=0.6)
+    cbar.set_label('Osuus')
 
-# Convert GeoDataFrame to JSON, preserving selected properties, including 'color'
-muns_json = muns.to_json()
+    plt.savefig(output_filename, bbox_inches='tight', pad_inches=0.1, dpi=300)
+    plt.show()
 
-# Create a folium map centered on Finland
-m = folium.Map(location=[64.9667, 25.6667], zoom_start=5, height=800, width=500)
 
-# Add munincipalities to the map with hover effects
-geojson = folium.GeoJson(
-    muns_json,
-    style_function=lambda feature: {
-        'fillColor': feature['properties']['color'],  # Use color property
-        'color': 'black',
-        'weight': 0.1,
-        'fillOpacity': 0.2,
-    },
-    highlight_function=lambda feature: {
+# --- Data Loading ---
+from uuid import uuid4
 
-        'weight': 1,
-    },
-    tooltip=folium.GeoJsonTooltip(fields=['NAMEFIN'])
-)
-geojson.add_to(m)
+try:
+    # Load data based on configuration
+    if data_type == 'paikat':
+        codes = pd.read_csv(paikat_path, index_col=0)
+        data_label = 'paikat'
+    else:
+        codes = pd.read_csv(codes_path, index_col=0)
+        data_label = 'koodit'
+    
+    recs = pd.read_csv(metadata_path)
+    code_names = list(codes.columns)
+    print(f"Loaded {len(code_names)} {data_label}: {', '.join(code_names)}")
+except FileNotFoundError as e:
+    print(f"Error loading data: {e}")
+    print("Please make sure the data files are in the correct directory.")
+    code_names = []
 
-f = folium.Figure(height=800, width=500)
-m.add_to(f)
+if code_names:
+    merged_data = pd.merge(codes, recs, left_index=True, right_on='rec_id')
+    geometry = [Point(xy) for xy in zip(merged_data['lon'], merged_data['lat'])]
+    gdf = gpd.GeoDataFrame(merged_data, geometry=geometry, crs="EPSG:4326")
 
-# Display the map
-m
+    world = gpd.read_file('geo/ne_50m_admin_0_countries.geojson')
+    finland_shape = world[world.name.isin(['Finland', 'Aland'])]
 
-# %%
-import geopandas as gpd
-import random
-import colorsys
-import folium
+    maakuntarajat = gpd.read_file('geo/maakuntarajat.json')
 
-# Let's draw the map of Jyväskylä overlaid to the folium default map (openstreetmap)
+    # Determine output directory
+    if save_for_pdf:
+        output_dir = 'output/figures_maps'
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Saving maps to figures directory: {output_dir}")
+    else:
+        run_id = str(uuid4())[:8]
+        output_dir = f'output/analyysi_koodikartat/{run_id}'
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Saving maps to: {output_dir}")
 
-def to_pastel_color(h, s=0.5, l=0.85):
-    rgb = colorsys.hls_to_rgb(h, l, s)
-    r, g, b = [int(x * 255) for x in rgb]
-    return f'#{r:02x}{g:02x}{b:02x}'
+    for i, code in enumerate(code_names, start=1):
+        safe_code_name = sanitize_filename(code)
+        print(f"Generating map for {data_label}: {code}...")
+        
+        if save_for_pdf:
+            # Save directly to figures_maps with numbered prefix
+            output_file = os.path.join(output_dir, f'{i:02d}_kartta_{safe_code_name}.png')
+        else:
+            # Save to code-specific subdirectory
+            code_dir = os.path.join(output_dir, safe_code_name)
+            os.makedirs(code_dir, exist_ok=True)
+            output_file = os.path.join(code_dir, f'{safe_code_name}_grid.png')
+        
+        plot_code_map(gdf, finland_shape, maakuntarajat, code, output_file)
 
-def generate_pastel_colors(n=5):
-    hues = [i / n for i in range(n)]  # Generate evenly spaced hues
-    pastel_colors = [to_pastel_color(h) for h in hues]
-    return pastel_colors
-
-# Load data into GeoDataFrame
-muns = gpd.read_file('geo/kuntarajat.json')
-
-# Filter for Jyväskylä
-jyvaskyla = muns[muns['NAMEFIN'] == 'Jyväskylä'].copy()
-
-# Generate pastel colors and assign them to the filtered municipality
-pastel_colors = generate_pastel_colors(len(jyvaskyla))
-random.shuffle(pastel_colors)
-jyvaskyla.loc[:, 'color'] = pastel_colors
-
-# Re-project to a projected CRS (e.g., EPSG:3857) for accurate centroid calculations
-jyvaskyla_projected = jyvaskyla.to_crs(epsg=3857)
-
-# Calculate the centroid in the projected CRS
-projected_centroid = jyvaskyla_projected.geometry.centroid.iloc[0]
-
-# Convert the centroid back to geographic CRS (EPSG:4326)
-centroid_geom = gpd.GeoSeries([projected_centroid], crs=3857).to_crs(epsg=4326)
-
-# Extract the correct geographic coordinates
-coords = centroid_geom.iloc[0].coords[0]
-
-# Create a folium map centered on Jyväskylä with the original CRS
-m = folium.Map(location=[coords[1], coords[0]], zoom_start=10, height=800, width=500)
-
-# Add Jyväskylä to the map with hover effects
-geojson = folium.GeoJson(
-    jyvaskyla.to_json(),
-    style_function=lambda feature: {
-        'fillColor': feature['properties']['color'],
-        'color': 'black',
-        'weight': 0.5,
-        'fillOpacity': 0.2,
-    },
-    tooltip=folium.GeoJsonTooltip(fields=['NAMEFIN'])
-)
-geojson.add_to(m)
-
-f = folium.Figure(height=800, width=500)
-m.add_to(f)
-
-# Display the map
-m
-
-# %%
-import geopandas as gpd
-import numpy as np
-import folium
-from shapely.geometry import Point
-import matplotlib.pyplot as plt
-from matplotlib import cm
-
-# Let's try drawing a heatmap over the map of Finland based on some point data.
-
-# Load county borders
-counties = gpd.read_file('geo/maakuntarajat.json')
-
-# Initialize folium map
-m = folium.Map(location=[64.9667, 25.6667], zoom_start=5, tiles='cartodbpositron')
-
-# Define grid parameters
-finland_lat_min, finland_lat_max = 59.5, 70.1
-finland_lon_min, finland_lon_max = 19.0, 31.6
-grid_res = 0.1
-
-# Create grid
-grid_lat = np.arange(finland_lat_min, finland_lat_max, grid_res)
-grid_lon = np.arange(finland_lon_min, finland_lon_max, grid_res)
-
-# City data
-finland_data = [
-    {"city": "Helsinki", "latitude": 60.1695, "longitude": 24.9354, "pop": 684589},
-    {"city": "Tampere", "latitude": 61.4978, "longitude": 23.7608, "pop": 260358},
-    {"city": "Turku", "latitude": 60.4518, "longitude": 22.2666, "pop": 206035},
-    {"city": "Oulu", "latitude": 65.0121, "longitude": 25.4651, "pop": 216194},
-    {"city": "Rovaniemi", "latitude": 66.5039, "longitude": 25.7294, "pop": 65738},
-    {"city": "Kuopio", "latitude": 62.8910, "longitude": 27.6780, "pop": 125668},
-    {"city": "Joensuu", "latitude": 62.6010, "longitude": 29.7639, "pop": 78743},
-    {"city": "Jyväskylä", "latitude": 62.2426, "longitude": 25.7473, "pop": 149269},
-]
-
-# IDW interpolation function (get a weighted average value to each of the points in the grid)
-def idw_interpolate(x, y, values, xi, yi, power=2):
-    distances = np.sqrt((xi - x[:, None, None])**2 + (yi - y[:, None, None])**2)
-    weights = 1 / (np.where(distances == 0, np.nan, distances) ** power)
-    total_weights = np.nansum(weights, axis=0)
-    weighted_values = np.nansum(weights * values[:, None, None], axis=0)
-    return np.divide(weighted_values, total_weights, where=total_weights != 0)
-
-# Interpolation
-x = np.array([city["latitude"] for city in finland_data])
-y = np.array([city["longitude"] for city in finland_data])
-pop = np.array([city["pop"] for city in finland_data])
-zi = idw_interpolate(x, y, pop, grid_lat[:, None], grid_lon[None, :])
-
-# Normalize and color mapping
-norm = plt.Normalize(vmin=zi.min(), vmax=zi.max())
-colors = cm.viridis(norm(zi))
-
-# Use rectangles to cover the area (not for production)
-if counties is not None:
-    for i, lat in enumerate(grid_lat[:-1]):
-        for j, lon in enumerate(grid_lon[:-1]):
-            pt = Point(lon, lat)
-            if counties.contains(pt).any():
-                color = colors[i, j]
-                color_hex = '#{:02x}{:02x}{:02x}'.format(int(255 * color[0]), int(255 * color[1]), int(255 * color[2]))
-                rectangle = folium.Rectangle(
-                    bounds=[[lat, lon], [lat + grid_res, lon + grid_res]],
-                    color=color_hex,
-                    opacity=0.5,
-                    fill=True,
-                    fill_color=color_hex,
-                    fill_opacity=0.5,
-                    weight=0.0
-                )
-                m.add_child(rectangle)
-
-# Display the map
-m
+    print(f"\nAll maps generated successfully!")
 
 # %%

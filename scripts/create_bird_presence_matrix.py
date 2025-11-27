@@ -63,7 +63,7 @@ def load_recording_metadata(target_rec_ids):
     return metadata
 
 
-def extract_bird_observations(target_rec_ids, threshold=0.5):
+def extract_bird_observations(target_rec_ids, threshold):
     """
     Extract bird observations from species_ids_since_June25.csv.
     
