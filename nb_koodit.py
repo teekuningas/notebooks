@@ -175,10 +175,10 @@ import os
 # Here we actually apply the threshold, create the clusters, and generate a representative code for each.
 
 # The threshold-parameter for the clustering (bigger threshold means bigger clusters. Here, smaller values are probably better.)
-threshold = 0.25
+threshold = 0.20
 
 # Discard clusters with less than {min_size} elements.
-min_size = 2
+min_size = 3
 
 # Compute the clusters with the selected threshold
 distance_matrix = pdist(vectors, metric='cosine')
