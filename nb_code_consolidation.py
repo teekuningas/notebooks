@@ -19,26 +19,36 @@ import os
 import json
 import numpy as np
 from uuid import uuid4
-from scipy.spatial.distance import pdist
-from scipy.cluster.hierarchy import linkage, fcluster
 
 from llm import embed, generate_simple
 
 # --- Configuration ---
-INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt" # Adjust to point to your data
-SIMILARITY_MERGE_THRESHOLD = 0.45 # Vector similarity lower bound (speed filter)
-LLM_MERGE_THRESHOLD = 0.70 # LLM score lower bound (quality filter). 0.0-1.0. Lower = more aggressive merging.
-TARGET_THEMES = 20 # Soft target. Loop will stop if this is reached OR if no pairs > threshold exist.
-SIZE_PENALTY_WEIGHT = 3.0 # Soft penalty for large themes. Higher = stronger preference for balanced merges.
+INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
+
+# The Zen Parameter: controls merge resistance based on size.
+# penalty = exp(-λ × (imbalance + proportion))
+# where:
+#   imbalance = (ratio - 1), ratio = max(size_a, size_b) / min(size_a, size_b)
+#   proportion = (size_a + size_b) / total_codes
+#
+# This unified formula:
+# - Blocks imbalanced merges (big eating small)
+# - Slows down large balanced merges (preventing black holes)
+# - Uses a single parameter for both effects
+SIZE_PENALTY_LAMBDA = 3.0
+
+MERGE_THRESHOLD = 0.70  # Effective score threshold for merging
+MAX_REJECTIONS_PER_ITERATION = 20  # Stop iteration after this many new rejections
+ARTIFACT_BATCH_SIZE = 20  # Batch size for artifact detection
+
 RUN_ID = str(uuid4())[:8]
 OUTPUT_DIR = f"output/consolidation/{RUN_ID}"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 print(f"Run ID: {RUN_ID}")
-print(f"Vector Threshold: {SIMILARITY_MERGE_THRESHOLD}")
-print(f"LLM Threshold: {LLM_MERGE_THRESHOLD}")
-print(f"Size Penalty Weight: {SIZE_PENALTY_WEIGHT}")
+print(f"Size Penalty λ: {SIZE_PENALTY_LAMBDA}")
+print(f"Merge Threshold: {MERGE_THRESHOLD}")
 
 # %%
 # --- Step 1: Robust Parsing ---
@@ -48,7 +58,7 @@ def parse_code_file(filepath):
     Parses the text file using a state-machine approach.
     Robust to multi-line explanations and varying indentation.
     """
-    with open(filepath, 'r') as f:
+    with open(filepath, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
     all_codes = []
@@ -143,35 +153,90 @@ if not os.path.exists(INPUT_FILE):
             print(f"Found input file at: {INPUT_FILE}")
 
 raw_codes = parse_code_file(INPUT_FILE)
-TOTAL_CODES = len(raw_codes)
-print(f"Parsed {TOTAL_CODES} codes.")
+print(f"Parsed {len(raw_codes)} codes.")
 
 # %%
-# --- Step 2: String-Based Deduplication (The "Obvious" Phase) ---
+# --- Step 2: Deduplication and Artifact Removal ---
+#
+# 1. Group codes by normalized name (case-insensitive)
+# 2. Detect and remove technical artifacts (numbered codes like K1, L3)
+# 3. Build initial themes
 
-# Before expensive embeddings, merge everything that has the same name.
-# "Luonto" == "luonto" == "Luonto "
+def detect_artifacts_batch(code_names):
+    """Ask LLM to identify artifacts from a batch of code names."""
+    codes_list = "\n".join([f"- {name}" for name in code_names])
+    
+    prompt = f"""Tunnista seuraavista koodeista VAIN selkeät tekniset artefaktit.
 
+Artefakteja ovat AINOASTAAN:
+- Numerokoodit tai tunnisteet (esim. "1.1", "K1", "L3", "T2")
+- Lyhenteet joissa numero (esim. "LS1", "M1")
+
+EI artefakteja:
+- Oikeat suomenkieliset sanat tai fraasit (esim. "Lintubongaus", "Metsätalous", "Rauha ja hiljaisuus")
+- Käsitteet jotka kuvaavat teemoja
+
+KOODIT:
+{codes_list}
+
+Palauta VAIN selkeät numerokoodit/tunnisteet. Tyhjä lista jos ei ole.
+Vastaa JSON: {{ "artifacts": ["koodi1", "koodi2"] }}"""
+
+    output_format = {
+        "type": "object",
+        "properties": {
+            "artifacts": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        },
+        "required": ["artifacts"]
+    }
+    
+    try:
+        response = generate_simple(prompt, "Tunnista.", output_format=output_format, provider="llamacpp")
+        return json.loads(response).get('artifacts', [])
+    except:
+        return []
+
+# Group by normalized name
 grouped_codes = {}
-
 for item in raw_codes:
-    # Normalize key
     key = item['code'].strip().lower()
     if key not in grouped_codes:
         grouped_codes[key] = []
     grouped_codes[key].append(item)
 
-print(f"Found {len(grouped_codes)} unique code names.")
+print(f"Unique code names: {len(grouped_codes)} (from {len(raw_codes)} total instances)")
 
-# Convert these groups into initial Theme objects
+# Detect artifacts (use original case names for LLM)
+unique_names = [items[0]['code'].strip() for items in grouped_codes.values()]
+all_artifacts = set()
+
+for i in range(0, len(unique_names), ARTIFACT_BATCH_SIZE):
+    batch = unique_names[i:i+ARTIFACT_BATCH_SIZE]
+    artifacts = detect_artifacts_batch(batch)
+    all_artifacts.update(a.lower() for a in artifacts)  # normalize
+    if artifacts:
+        print(f"  Batch {i//ARTIFACT_BATCH_SIZE + 1}: found {len(artifacts)} artifacts")
+
+if all_artifacts:
+    print(f"Artifacts removed ({len(all_artifacts)}):")
+    for key in sorted(all_artifacts):
+        if key in grouped_codes:
+            expl = grouped_codes[key][0]['explanation'][:60]
+            print(f"  - {key}: {expl}...")
+            del grouped_codes[key]
+
+print(f"Clean unique codes: {len(grouped_codes)}")
+
+# Build themes
 themes = []
+TOTAL_CODES = 0
 
 for key, items in grouped_codes.items():
-    # Find most common display name (e.g., "Luonto" vs "luonto")
     names = [item['code'].strip() for item in items]
     most_common_name = max(set(names), key=names.count)
-    
-    # Find longest explanation to use as the "canonical" definition for now
     best_explanation = max([item['explanation'] for item in items], key=len)
     
     theme = {
@@ -182,6 +247,9 @@ for key, items in grouped_codes.items():
         "embedding": None
     }
     themes.append(theme)
+    TOTAL_CODES += len(items)
+
+print(f"Initial themes: {len(themes)}, total source codes: {TOTAL_CODES}")
 
 # %%
 # --- Step 3: Embedding Initial Themes ---
@@ -196,59 +264,51 @@ for theme in themes:
 print(f"Ready to start Symmetric Loop with {len(themes)} themes.")
 
 # %%
-# --- Step 4: The LLM-Verified Symmetric Loop ---
+# --- Step 4: The Zen Merge Loop ---
+#
+# Philosophy:
+# - Embeddings guide exploration priority (what to try next)
+# - LLM is the judge (should this pair merge?)
+# - Cache remembers tested pairs to skip them
+# - Unified size penalty prevents both imbalance and black holes
+#
+# The Formula:
+#   penalty = exp(-λ × (imbalance + proportion))
+#   where imbalance = ratio - 1, proportion = combined_size / total
+#
+# Cache Strategy (simple set, not dict):
+# - If pair in cache → already tested and rejected → skip
+# - If pair merged, it wouldn't be in cache (new theme = new key)
+# - When themes merge, old cache entries become irrelevant
 
 def get_cosine_similarity_matrix(current_themes):
+    """Compute pairwise cosine similarity between theme embeddings."""
     embs = np.array([t['embedding'] for t in current_themes])
-    
-    # Raw Cosine Similarity
     sim = np.dot(embs, embs.T)
     norms = np.linalg.norm(embs, axis=1) + 1e-9
     sim /= np.outer(norms, norms)
-    
-    # Set diagonal to -1
     np.fill_diagonal(sim, -1)
     return sim
 
-def apply_size_penalty(sim_matrix, current_themes):
-    # Apply Zen Balance Penalty (Soft Size Penalty)
-    sizes = np.array([len(t['source_codes']) for t in current_themes])
-    total_n = TOTAL_CODES
-    
-    # Matrix of combined sizes
-    combined_sizes = sizes[:, None] + sizes[None, :]
-    combined_proportions = combined_sizes / total_n
-    
-    penalty_matrix = 1.0 / (1.0 + SIZE_PENALTY_WEIGHT * combined_proportions)
-    
-    # Apply penalty
-    priority_matrix = sim_matrix * penalty_matrix
-    return priority_matrix
 
 def merge_themes(theme_a, theme_b):
-    # Combine source codes
+    """Ask LLM to synthesize a new theme name and definition from two merged themes."""
     combined_sources = theme_a['source_codes'] + theme_b['source_codes']
     
-    # LLM Prompt to synthesize new name/definition
-    explanations = [item['explanation'] for item in combined_sources]
-    sample_explanations = list(set(explanations))[:10] 
-    
-    prompt = f"""
-    Yhdistä nämä kaksi käsitettä yhdeksi ylemmän tason kategoriaksi.
-    
-    KÄSITE 1: {theme_a['name']} ({theme_a['definition']})
-    KÄSITE 2: {theme_b['name']} ({theme_b['definition']})
-    
-    Luo uusi nimi ja määritelmä.
-    
-    OHJEET:
-    1. Nimen on oltava yksinkertainen, yleiskielinen substantiivi tai perusmuotoinen fraasi.
-    2. Älä keksi uusia, runollisia tai monimutkaisia termejä.
-    3. Jos toinen alkuperäisistä nimistä kuvaa hyvin koko yhdistelmää, käytä sitä.
-    4. Määritelmän tulee olla yksi selkeä ja toteava virke.
-    
-    Vastaa JSON-muodossa: {{ "name": "...", "definition": "..." }}
-    """
+    prompt = f"""Yhdistä nämä kaksi käsitettä yhdeksi ylemmän tason kategoriaksi.
+
+KÄSITE 1: {theme_a['name']} ({theme_a['definition']})
+KÄSITE 2: {theme_b['name']} ({theme_b['definition']})
+
+Luo uusi nimi ja määritelmä.
+
+OHJEET:
+1. Nimen on oltava yksinkertainen, yleiskielinen substantiivi tai perusmuotoinen fraasi.
+2. Älä keksi uusia, runollisia tai monimutkaisia termejä.
+3. Jos toinen alkuperäisistä nimistä kuvaa hyvin koko yhdistelmää, käytä sitä.
+4. Määritelmän tulee olla yksi selkeä ja toteava virke.
+
+Vastaa JSON-muodossa: {{ "name": "...", "definition": "..." }}"""
     
     output_format = {
         "type": "object",
@@ -280,40 +340,41 @@ def merge_themes(theme_a, theme_b):
         "embedding": new_emb
     }
     return new_theme
+
+
 def check_merge_validity(theme_a, theme_b):
-    # Include samples of original explanations for context
+    """
+    Ask LLM to evaluate semantic similarity between two themes.
+    Returns raw score in [0, 1].
+    """
     explanations_a = list(set([x['explanation'] for x in theme_a['source_codes']]))[:15]
     explanations_b = list(set([x['explanation'] for x in theme_b['source_codes']]))[:15]
     
-    context_str = ""
-    context_str += f"Esimerkkejä teeman '{theme_a['name']}' selityksistä:\n" + "\n".join([f"- {e}" for e in explanations_a])
-    context_str += f"\n\nEsimerkkejä teeman '{theme_b['name']}' selityksistä:\n" + "\n".join([f"- {e}" for e in explanations_b])
+    context_str = f"Esimerkkejä teeman '{theme_a['name']}' selityksistä:\n"
+    context_str += "\n".join([f"- {e}" for e in explanations_a])
+    context_str += f"\n\nEsimerkkejä teeman '{theme_b['name']}' selityksistä:\n"
+    context_str += "\n".join([f"- {e}" for e in explanations_b])
 
-    prompt = f"""
-    Arvioi kahden teeman samankaltaisuutta.
-    
-    TEEMA 1: {theme_a['name']}
-    Määritelmä: {theme_a['definition']}
-    
-    TEEMA 2: {theme_b['name']}
-    Määritelmä: {theme_b['definition']}
-    
-    {context_str}
-    
-    Anna samankaltaisuuspisteet (0.0 - 1.0) seuraavin perustein:
-    
-    - Korkea (0.8 - 1.0): Teemat ovat sama asia tai toinen sisältyy toiseen.
-    - Keskitaso (0.5 - 0.8): Teemat ovat läheisiä, mutta niillä on selkeä vivahde-ero.
-    - Matala (0.0 - 0.5): Teemat ovat eri asioita.
-    
-    Vastaa vain JSON: {{ "score": 0.00 }}
-    """
+    prompt = f"""Arvioi kahden teeman samankaltaisuutta.
+
+TEEMA 1: {theme_a['name']}
+Määritelmä: {theme_a['definition']}
+
+TEEMA 2: {theme_b['name']}
+Määritelmä: {theme_b['definition']}
+
+{context_str}
+
+Anna samankaltaisuuspisteet (0.0 - 1.0):
+- Korkea (0.8 - 1.0): Teemat ovat sama asia tai toinen sisältyy toiseen.
+- Keskitaso (0.5 - 0.8): Teemat ovat läheisiä, mutta niillä on selkeä vivahde-ero.
+- Matala (0.0 - 0.5): Teemat ovat eri asioita.
+
+Vastaa vain JSON: {{ "score": 0.00 }}"""
     
     output_format = {
         "type": "object",
-        "properties": {
-            "score": {"type": "number"}
-        },
+        "properties": {"score": {"type": "number"}},
         "required": ["score"]
     }
     
@@ -321,82 +382,166 @@ def check_merge_validity(theme_a, theme_b):
         response = generate_simple(prompt, "Analysoi.", output_format=output_format, provider="llamacpp")
         return float(json.loads(response)['score'])
     except:
-        return 0.0 # Fail safe
+        return 0.0
 
-# --- The Loop ---
 
-ignore_pairs = set() # Store tuples of (id_a, id_b) that LLM rejected
+# --- The Zen Loop ---
 
-while len(themes) > TARGET_THEMES:
-    print(f"Themes remaining: {len(themes)}")
+log_lines = []
+
+def log(msg):
+    """Print and record to log."""
+    print(msg)
+    log_lines.append(msg)
+
+# Log header with run parameters
+log(f"{'='*60}")
+log(f"CODE CONSOLIDATION RUN")
+log(f"{'='*60}")
+log(f"Run ID: {RUN_ID}")
+log(f"Input file: {INPUT_FILE}")
+log(f"Size Penalty λ: {SIZE_PENALTY_LAMBDA}")
+log(f"Merge Threshold: {MERGE_THRESHOLD}")
+log(f"Initial themes: {len(themes)}")
+log(f"Total source codes: {TOTAL_CODES}")
+log(f"{'='*60}")
+
+# Cache for tested pairs: set of (content_key_a, content_key_b)
+# If in cache → already tested and rejected (if it passed, it would have merged)
+tested_pairs = set()
+total_merges = 0
+
+def get_content_key(theme):
+    """Create a simple string key from theme's source codes."""
+    # Sort source code identifiers to make a deterministic key
+    # Include code name and explanation to ensure uniqueness even within same rec_id/iter
+    ids = sorted(f"{item['rec_id']}_{item['iter_idx']}_{item['code']}_{item['explanation']}" for item in theme['source_codes'])
+    return tuple(ids)
+
+def get_cache_key(theme_a, theme_b):
+    """Create a cache key for a pair of themes."""
+    key_a = get_content_key(theme_a)
+    key_b = get_content_key(theme_b)
+    # Sort the two keys to ensure (A,B) == (B,A)
+    if key_a <= key_b:
+        return (key_a, key_b)
+    return (key_b, key_a)
+
+while True:
+    n_themes = len(themes)
     
-    # 1. Calculate Raw Similarity
+    log(f"\n{'='*60}")
+    log(f"--- Iteration: {n_themes} themes ---")
+    
+    # 1. Compute base similarity from embeddings
     sim_matrix = get_cosine_similarity_matrix(themes)
     
-    # 2. Calculate Merge Priority (Similarity weighted by Balance)
-    priority_matrix = apply_size_penalty(sim_matrix, themes)
+    # 2. Compute unified size penalty (imbalance + proportion)
+    sizes = np.array([len(t['source_codes']) for t in themes])
+    size_max = np.maximum(sizes[:, None], sizes[None, :])
+    size_min = np.minimum(sizes[:, None], sizes[None, :])
+    ratio_matrix = size_max / np.maximum(size_min, 1)
+    imbalance_matrix = ratio_matrix - 1
     
-    # 3. Find best candidate pair based on PRIORITY
-    found_pair = False
+    combined_sizes = sizes[:, None] + sizes[None, :]
+    proportion_matrix = combined_sizes / max(TOTAL_CODES, 1)
     
-    # Get indices sorted by PRIORITY (descending)
+    penalty_matrix = np.exp(-SIZE_PENALTY_LAMBDA * (imbalance_matrix + proportion_matrix))
+    
+    # 3. Build priority matrix: ALWAYS use embeddings for priority
+    #    (Cache is for skipping, not for ordering)
+    priority_matrix = sim_matrix * penalty_matrix
+    np.fill_diagonal(priority_matrix, -np.inf)
+    
+    # 4. Iterate pairs in order of embedding priority (most promising first)
     flat_indices = np.argsort(priority_matrix, axis=None)[::-1]
+    
+    found_merge = False
+    rejections_this_iteration = 0
     
     for idx in flat_indices:
         i, j = np.unravel_index(idx, priority_matrix.shape)
-        
-        if i >= j: continue # process upper triangle only
-        
-        # Check raw threshold on SIMILARITY (not priority) to avoid merging garbage
-        if sim_matrix[i, j] < SIMILARITY_MERGE_THRESHOLD:
-            print(f"No pairs above raw similarity threshold {SIMILARITY_MERGE_THRESHOLD}. Stopping.")
-            found_pair = False 
-            break 
-            
-        t_a = themes[i]
-        t_b = themes[j]
-        
-        # Check if previously rejected
-        pair_key = tuple(sorted((t_a['id'], t_b['id'])))
-        if pair_key in ignore_pairs:
+        if i >= j:
             continue
             
-        print(f"Candidate: '{t_a['name']}' <--> '{t_b['name']}' (Raw: {sim_matrix[i,j]:.2f}, Prio: {priority_matrix[i,j]:.2f})")
+        t_a, t_b = themes[i], themes[j]
+        cache_key = get_cache_key(t_a, t_b)
+        penalty = penalty_matrix[i, j]
         
-        # 4. LLM Check
-        score = check_merge_validity(t_a, t_b)
-        print(f"  -> LLM Score: {score:.2f}")
+        # Skip already tested pairs
+        if cache_key in tested_pairs:
+            continue
         
-        if score >= LLM_MERGE_THRESHOLD:
-            print(f"  -> Merging...")
+        # New pair: ask LLM
+        llm_score = check_merge_validity(t_a, t_b)
+        tested_pairs.add(cache_key)
+        
+        # Apply penalty to decision
+        effective_score = llm_score * penalty
+        
+        size_a, size_b = len(t_a['source_codes']), len(t_b['source_codes'])
+        raw_sim = sim_matrix[i, j]
+        
+        # Detailed logging (commented out for cleaner output, enable for debugging)
+        # log(f"[Test {rejections_this_iteration + 1}/{MAX_REJECTIONS_PER_ITERATION}] '{t_a['name']}' ({size_a}) <-> '{t_b['name']}' ({size_b})")
+        # log(f"  Embed: {raw_sim:.2f} × Penalty: {penalty:.2f} = {raw_sim * penalty:.2f}")
+        # log(f"  LLM: {llm_score:.2f} × {penalty:.2f} = {effective_score:.2f}")
+        
+        if effective_score >= MERGE_THRESHOLD:
             new_theme = merge_themes(t_a, t_b)
-            print(f"     => Created: '{new_theme['name']}'")
+            log(f"  ✓ '{t_a['name']}' + '{t_b['name']}' → '{new_theme['name']}' ({len(new_theme['source_codes'])} codes) [LLM: {llm_score:.2f}]")
             
-            # Update list: Remove old, add new
-            new_theme_list = [t for k, t in enumerate(themes) if k != i and k != j]
-            new_theme_list.append(new_theme)
-            themes = new_theme_list
-            
-            found_pair = True
+            themes = [t for k, t in enumerate(themes) if k != i and k != j]
+            themes.append(new_theme)
+            total_merges += 1
+            found_merge = True
             break
         else:
-            print(f"  -> Rejected (Score < {LLM_MERGE_THRESHOLD}). Ignoring pair.")
-            ignore_pairs.add(pair_key)
-            
-    if not found_pair:
-        print("Loop terminated: No valid merges found or threshold reached.")
+            # Detailed rejection logging (commented out)
+            # log(f"  ✗ Rejected (need ≥ {MERGE_THRESHOLD})")
+            rejections_this_iteration += 1
+            if rejections_this_iteration >= MAX_REJECTIONS_PER_ITERATION:
+                break
+    
+    # Iteration summary
+    if found_merge:
+        log(f"  Tests: {rejections_this_iteration + 1}, Merges: 1 → {len(themes)} themes remaining")
+    else:
+        log(f"  Tests: {rejections_this_iteration}, Merges: 0 → stopping")
+        log(f"\n{'='*60}")
+        log(f"ALGORITHM COMPLETE")
+        log(f"  Total pairs tested: {len(tested_pairs)}")
+        log(f"  Total merges: {total_merges}")
+        log(f"  Total rejections: {len(tested_pairs) - total_merges}")
+        log(f"  Final theme count: {len(themes)}")
         break
 
-print(f"Final theme count: {len(themes)}")
+log(f"\n{'='*60}")
+log(f"FINAL SUMMARY: {len(themes)} themes from {TOTAL_CODES} original codes")
 
 # %%
 # --- Step 5: Save Results ---
+
+# Deduplicate theme names by appending size for disambiguation
+name_counts = {}
+for t in themes:
+    name = t['name']
+    name_counts[name] = name_counts.get(name, 0) + 1
+
+if any(c > 1 for c in name_counts.values()):
+    seen = {}
+    for t in themes:
+        name = t['name']
+        if name_counts[name] > 1:
+            count = seen.get(name, 0) + 1
+            seen[name] = count
+            t['name'] = f"{name} ({count})"
 
 output_path = os.path.join(OUTPUT_DIR, "final_themes.json")
 simple_output_path = os.path.join(OUTPUT_DIR, "final_themes_list.txt")
 
 # Save full JSON (excluding embedding vectors)
-with open(output_path, 'w') as f:
+with open(output_path, 'w', encoding='utf-8') as f:
     serializable_themes = []
     for t in themes:
         t_copy = t.copy()
@@ -406,15 +551,28 @@ with open(output_path, 'w') as f:
     json.dump(serializable_themes, f, indent=2, ensure_ascii=False)
 
 # Save simple text list for review
-with open(simple_output_path, 'w') as f:
-    f.write(f"Final {len(themes)} Themes (Threshold: {SIMILARITY_MERGE_THRESHOLD}):\n\n")
-    for idx, t in enumerate(themes):
-        f.write(f"{idx+1}. {t['name']}\n")
-        f.write(f"   Def: {t['definition']}\n")
-        f.write(f"   (Merged from {len(t['source_codes'])} source codes)\n\n")
+with open(simple_output_path, 'w', encoding='utf-8') as f:
+    f.write(f"Code Consolidation Results\n")
+    f.write(f"==========================\n")
+    f.write(f"λ (size penalty): {SIZE_PENALTY_LAMBDA}\n")
+    f.write(f"Merge threshold: {MERGE_THRESHOLD}\n")
+    f.write(f"Final themes: {len(themes)}\n\n")
+    
+    # Sort by size for readability
+    sorted_themes = sorted(themes, key=lambda t: len(t['source_codes']), reverse=True)
+    for idx, t in enumerate(sorted_themes):
+        f.write(f"{idx+1}. {t['name']} ({len(t['source_codes'])} codes)\n")
+        f.write(f"   {t['definition']}\n\n")
+
+# Save action log for debugging
+log_path = os.path.join(OUTPUT_DIR, "merge_log.txt")
+with open(log_path, 'w', encoding='utf-8') as f:
+    f.write("\n".join(log_lines))
 
 print(f"Saved results to {OUTPUT_DIR}")
 
-# Print preview
-for idx, t in enumerate(themes):
-    print(f"{idx+1}: {t['name']} ({len(t['source_codes'])})")
+# Print size distribution
+sorted_themes = sorted(themes, key=lambda t: len(t['source_codes']), reverse=True)
+print("\nSize distribution:")
+for idx, t in enumerate(sorted_themes[:20]):
+    print(f"  {t['name']}: {len(t['source_codes'])}")
