@@ -25,20 +25,20 @@ from llm import embed, generate_simple
 # --- Configuration ---
 INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
 
-# The Zen Parameter: controls merge resistance based on size.
-# penalty = exp(-λ × (imbalance + proportion))
+# The Zen Parameter: controls merge resistance based on size imbalance.
+# penalty = exp(-λ × imbalance)
 # where:
 #   imbalance = (ratio - 1), ratio = max(size_a, size_b) / min(size_a, size_b)
-#   proportion = (size_a + size_b) / total_codes
 #
-# This unified formula:
-# - Blocks imbalanced merges (big eating small)
-# - Slows down large balanced merges (preventing black holes)
-# - Uses a single parameter for both effects
+# This prevents "big eating small" - a large theme absorbing tiny ones.
+# We intentionally do NOT penalize large balanced merges, because:
+# - If two large themes are semantically the same, they should merge
+# - The self-healing nature of the algorithm means incorrectly merged
+#   themes will re-emerge as smaller clusters that can't be absorbed
 SIZE_PENALTY_LAMBDA = 3.0
 
-MERGE_THRESHOLD = 0.70  # Effective score threshold for merging
-MAX_REJECTIONS_PER_ITERATION = 20  # Stop iteration after this many new rejections
+MERGE_THRESHOLD = 0.50  # Lower threshold to allow more merging
+MAX_REJECTIONS_PER_ITERATION = 30  # More attempts per iteration
 ARTIFACT_BATCH_SIZE = 20  # Batch size for artifact detection
 
 RUN_ID = str(uuid4())[:8]
@@ -270,11 +270,15 @@ print(f"Ready to start Symmetric Loop with {len(themes)} themes.")
 # - Embeddings guide exploration priority (what to try next)
 # - LLM is the judge (should this pair merge?)
 # - Cache remembers tested pairs to skip them
-# - Unified size penalty prevents both imbalance and black holes
+# - Size imbalance penalty prevents "big eating small"
 #
 # The Formula:
-#   penalty = exp(-λ × (imbalance + proportion))
-#   where imbalance = ratio - 1, proportion = combined_size / total
+#   penalty = exp(-λ × imbalance)
+#   where imbalance = ratio - 1, ratio = max(size_a, size_b) / min(size_a, size_b)
+#
+# Note: We do NOT penalize large balanced merges. If two large themes
+# are semantically the same (e.g., "Luonto" + "Luonto"), they should merge.
+# The self-healing nature of the algorithm handles incorrect merges.
 #
 # Cache Strategy (simple set, not dict):
 # - If pair in cache → already tested and rejected → skip
@@ -436,17 +440,14 @@ while True:
     # 1. Compute base similarity from embeddings
     sim_matrix = get_cosine_similarity_matrix(themes)
     
-    # 2. Compute unified size penalty (imbalance + proportion)
+    # 2. Compute size penalty (imbalance only - no proportion penalty)
     sizes = np.array([len(t['source_codes']) for t in themes])
     size_max = np.maximum(sizes[:, None], sizes[None, :])
     size_min = np.minimum(sizes[:, None], sizes[None, :])
     ratio_matrix = size_max / np.maximum(size_min, 1)
     imbalance_matrix = ratio_matrix - 1
     
-    combined_sizes = sizes[:, None] + sizes[None, :]
-    proportion_matrix = combined_sizes / max(TOTAL_CODES, 1)
-    
-    penalty_matrix = np.exp(-SIZE_PENALTY_LAMBDA * (imbalance_matrix + proportion_matrix))
+    penalty_matrix = np.exp(-SIZE_PENALTY_LAMBDA * imbalance_matrix)
     
     # 3. Build priority matrix: ALWAYS use embeddings for priority
     #    (Cache is for skipping, not for ordering)
