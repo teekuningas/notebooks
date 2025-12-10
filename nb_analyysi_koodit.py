@@ -14,177 +14,141 @@
 # ---
 
 # %%
-from utils import read_files
-from utils import read_interview_data
-from utils import strip_webvtt_to_plain_text
+import json
+from utils import read_interview_data, filter_interview_simple
 
-from utils import filter_interview_simple
+# --- Configuration ---
+INPUT_FILE = "output/consolidation/a2c6fc1b_seed10/final_themes.json"
 
-# Define the codes that are used
-#codes = ['Rauha', 'Ilo', 'Huoli', 'Yhteys luontoon', 'Nostalgia', 'Turvallisuus', 'Vapaus', 'Ylpeys', 'Kaipuu', 'Uteliaisuus']
-codes = ['Luonto', 'Rauhallisuus', 'Ympäristönsuojelu', 'Sää', 'Rentoutuminen', 'Eläimistö', 'Äänet', 'Linnut', 'Luonnon monimuotoisuus', 'Luontosuhde', 'Yksinäisyys', 'Kiitollisuus', 'Havainnointi', 'Kasvillisuus', 'Metsä', 'Vesi']
+# --- Load Themes ---
+with open(INPUT_FILE, 'r', encoding='utf-8') as f:
+    themes = json.load(f)
 
-# And read the texts of interest from the file system
-#contents = read_files(folder="data/linnut", prefix="nayte")
+codes = [theme['name'] for theme in themes]
+
+print(f"Loaded {len(codes)} themes from: {INPUT_FILE}")
+
+# --- Load Interview Data ---
 contents = read_interview_data("data/birdinterview", "observation")
-
-# Filter to a sensible subset
 contents = filter_interview_simple(contents)
-
-# Convert to (filename, content) tuples for now
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
-## First a smaller sample
-#codes = codes[:20]
-#contents = contents[:50]
-
-print(f"len(contents): {len(contents)}")
-print(f"len(codes): {len(codes)}")
-
-## Print to check that texts are correctly read
-#for fname, text in contents:
-#    print(f"{fname}:\n\n")
-#    print(f"{text}\n\n")
+print(f"Interviews: {len(contents)}")
+print(f"Themes: {len(codes)}")
 
 # %%
-import json
+# --- Code Presence Analysis ---
 
 from llm import generate_simple
 
-# Here, we will go through every text and every code for some number of iterations, and ask the llm to decide whether the code applies to the text or not.
-# Asking the same question multiple gives us a reliability estimate.
-
-# Define a machine-readable output format that the llm should produce, i.e. a boolean value "code_present".
 output_format = {
     "type": "object",
     "properties": {
-        "code_present": {
-            "type": "boolean"
-        }
+        "code_present": {"type": "boolean"}
     },
-    "required": [
-      "code_present"
-    ]
+    "required": ["code_present"]
 }
 
-# For every text and code, generate {n_iter} decisions.
-n_iter = 1
+N_ITERATIONS = 1
 
 results = []
-for idx, (fname, text) in enumerate(contents):
-    print(f"Generating row {idx+1} for {fname}..")
+for row_idx, (rec_id, text) in enumerate(contents):
+    print(f"Processing interview {row_idx+1}/{len(contents)}: {rec_id}")
+    
     for code in codes:
-        idx = 0
+        iter_idx = 0
         seed = 0
-        while idx < n_iter:
-            # It is easier for llms to do the decision in two steps: first request a free-formatted answer and then request it in the correct format. 
-            # This also allows different roles: we could use a reasoning model (which is bad at formatting) to do the first step and a formatting model (which is bad at reasoning) to do the second step.
+        
+        while iter_idx < N_ITERATIONS:
+            prompt = f"""Päätä, esiintyykö seuraava teema tekstinäytteessä.
 
-            # Define the instructions for the first, free-form step.
-            instruction = """
-            Päätä, liittyykö tekstinäyte annettuun koodiin. Vastaa "kyllä" tai "ei".
-            """
+TEEMA: {code}
 
-            # Define the content snippet given to the llm.
-            content = f"Koodi:\n\n\"{code}\"\n\nTekstinäyte: \n\n\"{text}\""
+TEKSTINÄYTE:
+{text}
 
-            # Generate the answer
-            free_form_result = generate_simple(instruction, content, seed=idx, provider="llamacpp")
-
-            if not free_form_result:
-                print("Trying again.. (no result)")
-                print(f"Code was: {code}")
-                print(f"Text was: {text}")
-                print(f"Seed was: {seed}")
-                seed += 1
-                continue
-
-            # Now, we use a second LLM call to format the free-form answer into the desired JSON format.
-            # This is more robust than trying to parse the free-form text manually.
-            formatting_instruction = '''
-            Saat syötteenä vapaamuotoisen viestin, joka on joko myönteinen tai kielteinen. Muotoile se uudelleen JSONiksi niin että code_present = true jos syöteteksti on myönteinen ja code_present = false jos syöteteksti on kielteinen.
-            '''
-
-            json_result_str = generate_simple(formatting_instruction, free_form_result, seed=10, output_format=output_format, provider="llamacpp")
+Vastaa "kyllä" jos teema esiintyy, "ei" jos ei esiinny."""
 
             try:
-                # Extract the boolean value from the JSON result.
-                code_present = json.loads(json_result_str)['code_present']
-            except (json.JSONDecodeError, KeyError):
-                print(f"Trying again.. (invalid JSON result: '{json_result_str}')")
-                print(f"Code was: {code}")
-                print(f"Text was: {text}")
-                print(f"Seed was: {seed}")
+                free_form = generate_simple(prompt, "", seed=seed, provider="llamacpp")
+                
+                if not free_form:
+                    seed += 1
+                    continue
+
+                format_prompt = """Muotoile vapaamuotoinen vastaus JSON-muotoon.
+Jos vastaus on myönteinen: code_present = true
+Jos vastaus on kielteinen: code_present = false"""
+
+                json_str = generate_simple(format_prompt, free_form, seed=10, 
+                                          output_format=output_format, provider="llamacpp")
+                
+                code_present = json.loads(json_str)['code_present']
+                
+                results.append({
+                    "fname": rec_id,
+                    "code": code,
+                    "iter": iter_idx,
+                    "result": code_present
+                })
+                
+                iter_idx += 1
+                seed += 1
+                
+            except (json.JSONDecodeError, KeyError) as e:
                 seed += 1
                 continue
 
-            # Store it
-            results.append({
-                "fname": fname,
-                "code": code,
-                "iter": idx,
-                "result": code_present
-            })
-            idx += 1
-            seed += 1
+print(f"\nGenerated {len(results)} results")
 # %%
-import pandas as pd
-from uuid import uuid4
-import os
+# --- Results Table ---
 
-# Here we use pandas to construct a simple colored table out of the results.
+import pandas as pd
+import os
+from uuid import uuid4
 
 run_id = str(uuid4())[:8]
 
-# Create a dictionary to store the results
-transformed_data = {}
-
-# From the flat results structure, create hierarchical easier structure
+# Aggregate results by interview and theme
+table = {}
 for item in results:
-    fname = item['fname']
+    rec_id = item['fname']
     code = item['code']
     
-    if fname not in transformed_data:
-        transformed_data[fname] = {}
+    if rec_id not in table:
+        table[rec_id] = {}
+    if code not in table[rec_id]:
+        table[rec_id][code] = []
     
-    if code not in transformed_data[fname]:
-        transformed_data[fname][code] = []
-    
-    transformed_data[fname][code].append(item['result'])
+    table[rec_id][code].append(item['result'])
 
-# Calculate true percentages for each text and code.
-for fname in transformed_data:
-    for code in transformed_data[fname]:
-        true_count = transformed_data[fname][code].count(True)
-        total_count = len(transformed_data[fname][code])
-        transformed_data[fname][code] = (true_count / total_count)
+# Calculate presence percentage
+for rec_id in table:
+    for code in table[rec_id]:
+        true_count = table[rec_id][code].count(True)
+        total = len(table[rec_id][code])
+        table[rec_id][code] = true_count / total
 
-# Create DataFrame
-df = pd.DataFrame.from_dict(transformed_data, orient='index')
+df = pd.DataFrame.from_dict(table, orient='index')
 
-# Save the DataFrame with values between 0 and 1
+# Save results
 output_dir = f"output/analyysi_koodit/{run_id}"
 os.makedirs(output_dir, exist_ok=True)
-filename = f"{output_dir}/koodit_{len(codes)}x{len(contents)}.csv"
-df.to_csv(filename)
+output_path = os.path.join(output_dir, f"themes_{len(codes)}x{len(contents)}.csv")
+df.to_csv(output_path)
 
-# Add averages and format for visualization
+print(f"Saved to: {output_path}")
+
+# Display with formatting
 df_display = df.copy()
 df_display['total'] = df_display.mean(axis=1)
 df_display.loc['total'] = df_display.mean()
-df_display = df_display.round(2) * 100
+df_display = (df_display * 100).round(2)
 
-# Define the styling function
-def color_high_values(val):
-    color = 'background-color: rgba(144, 238, 144, 0.3)' if val >= 50 else ''
-    return color
+def highlight_present(val):
+    return 'background-color: rgba(144, 238, 144, 0.3)' if val >= 50 else ''
 
-# Apply the styling
-styled_df = df_display.style.map(color_high_values).format("{:.2f}")
-
-print(f"Results saved to: {filename}")
-
-# Display the styled DataFrame
+styled_df = df_display.style.map(highlight_present).format("{:.2f}")
 styled_df
 
 # %%

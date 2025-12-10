@@ -63,7 +63,7 @@ birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 bird_presence = (birds_raw.sum(axis=1) > 0).astype(int).to_frame(name='Lintu')
 
 # Load outcomes
-koodit_raw = pd.read_csv('./inputs/llm-thematic-data/koodit_16x452.csv', index_col=0)
+koodit_raw = pd.read_csv('./output/legacy_analysis/koodit_16x452.csv', index_col=0)
 
 # Align by rec_id
 common_ids = bird_presence.index.intersection(koodit_raw.index)

@@ -55,8 +55,8 @@ os.makedirs(output_dir, exist_ok=True)
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-paikat_raw = pd.read_csv('./inputs/llm-thematic-data/paikat_10x452.csv', index_col=0)
-merkitykset_raw = pd.read_csv('./inputs/llm-thematic-data/merkitykset_10x452.csv', index_col=0)
+paikat_raw = pd.read_csv('./output/legacy_analysis/paikat_10x452.csv', index_col=0)
+merkitykset_raw = pd.read_csv('./output/legacy_analysis/merkitykset_10x452.csv', index_col=0)
 
 predictor_binary = (paikat_raw == 1.0).astype(int)
 outcome_binary = (merkitykset_raw == 1.0).astype(int)

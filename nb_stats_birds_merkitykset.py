@@ -57,7 +57,7 @@ os.makedirs(output_dir, exist_ok=True)
 # %%
 birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
-merkitykset_raw = pd.read_csv('./inputs/llm-thematic-data/merkitykset_10x452.csv', index_col=0)
+merkitykset_raw = pd.read_csv('./output/legacy_analysis/merkitykset_10x452.csv', index_col=0)
 
 common_ids = birds_raw.index.intersection(merkitykset_raw.index)
 predictor_binary = birds_raw.loc[common_ids].astype(int)

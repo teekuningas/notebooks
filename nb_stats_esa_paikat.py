@@ -57,7 +57,7 @@ os.makedirs(output_dir, exist_ok=True)
 # %%
 esa_raw = pd.read_csv('./inputs/bird-metadata-refined/esa_habitat_presence_fi.csv')
 esa_raw = esa_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
-paikat_raw = pd.read_csv('./inputs/llm-thematic-data/paikat_10x452.csv', index_col=0)
+paikat_raw = pd.read_csv('./output/legacy_analysis/paikat_10x452.csv', index_col=0)
 
 common_ids = esa_raw.index.intersection(paikat_raw.index)
 predictor_binary = esa_raw.loc[common_ids].astype(int)
