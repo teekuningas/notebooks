@@ -55,27 +55,30 @@ os.makedirs(output_dir, exist_ok=True)
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-# Load bird groups and create binary "any bird" variable
-birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
-birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
+# Load bird groups and use the "Linnut" (Any Bird) column
+birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv', index_col='rec_id')
+predictor_binary = birds_raw[['Linnut']].astype(int)
 
-# Create single binary predictor: bird present (1) or not (0)
-bird_presence = (birds_raw.sum(axis=1) > 0).astype(int).to_frame(name='Lintu')
-
-# Load outcomes
-koodit_raw = pd.read_csv('./output/legacy_analysis/koodit_16x452.csv', index_col=0)
+# Load outcomes from new themes file
+koodit_raw = pd.read_csv('./output/analyysi_koodit/99699c4b/themes_143x452.csv', index_col=0)
 
 # Align by rec_id
-common_ids = bird_presence.index.intersection(koodit_raw.index)
-predictor_binary = bird_presence.loc[common_ids]
-outcome_binary = (koodit_raw.loc[common_ids] == 1.0).astype(int)
+common_ids = predictor_binary.index.intersection(koodit_raw.index)
+predictor_binary = predictor_binary.loc[common_ids]
+outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
+
+# Filter outcomes: keep themes present in 10%-90% of interviews
+prevalence = outcome_binary.mean()
+themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
+print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
+outcome_binary = outcome_binary[themes_to_keep]
 
 print_data_summary(predictor_binary, outcome_binary, "Linnun läsnäolo", "Koodit")
 
 # %% ═════════ 2. Predictor Distribution ═════════
 
 # %%
-n_with_bird = predictor_binary['Lintu'].sum()
+n_with_bird = predictor_binary['Linnut'].sum()
 n_without_bird = len(predictor_binary) - n_with_bird
 
 print("=" * 70)
@@ -86,7 +89,7 @@ print(f"Haastatteluja joissa ei lintua:  {n_without_bird:3d} ({n_without_bird/le
 
 # Visualize distribution
 plot_binary_predictor_distribution(
-    predictor_binary, 'Lintu', 
+    predictor_binary, 'Linnut', 
     'Ei lintua', 'Lintu läsnä',
     'Linnun läsnäolo havainnoissa',
     f'{output_dir}/01_bird_presence_distribution.png',

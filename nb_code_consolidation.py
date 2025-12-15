@@ -25,7 +25,7 @@ from llm import embed, generate_simple
 # --- Configuration ---
 INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
 
-MERGE_THRESHOLD = 0.85
+MERGE_THRESHOLD = 0.75
 MAX_REJECTIONS_PER_ITERATION = 50
 ARTIFACT_BATCH_SIZE = 20
 RANDOM_SEED = 10
@@ -303,7 +303,6 @@ print(f"Embedded {len(themes)} themes")
 # %%
 # --- Merge Loop: Consolidate Synonyms ---
 # Embeddings guide which pairs to test; LLM judges if they're truly synonyms.
-# Threshold 0.85 ensures only true synonyms merge.
 
 def get_cosine_similarity_matrix(current_themes):
     """Compute pairwise cosine similarity between theme embeddings."""

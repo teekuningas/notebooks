@@ -66,9 +66,14 @@ def get_simplified_labels(original_type):
 def load_recording_locations():
     """Load recording locations from bird metadata."""
     # Load recording IDs from analysis dataset
-    with open('inputs/llm-thematic-data/koodit_16x452.csv', 'r') as f:
-        reader = csv.DictReader(f)
-        rec_ids = set(row[''] for row in reader)
+    input_path = 'output/analyysi_koodit/99699c4b/themes_143x452.csv'
+    rec_ids = set()
+    with open(input_path, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            if row:
+                rec_ids.add(row[0])
     
     # Load coordinates from metadata
     centers = {}  # rec_id -> (lon, lat)

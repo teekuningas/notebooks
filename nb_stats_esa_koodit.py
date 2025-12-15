@@ -50,7 +50,7 @@ STANDARD_FIGSIZE = (12, 9)
 # ══════════════════════════════════════════════════════════════════════════
 
 # Input: consolidated themes from analyysi_koodit
-THEMES_FILE = './output/analyysi_koodit/d5937855/themes_5x452.csv'
+THEMES_FILE = './output/analyysi_koodit/99699c4b/themes_143x452.csv'
 
 output_dir = './output/esa_koodit'
 os.makedirs(output_dir, exist_ok=True)
@@ -66,6 +66,12 @@ themes_raw = pd.read_csv(THEMES_FILE, index_col=0)
 common_ids = esa_raw.index.intersection(themes_raw.index)
 predictor_binary = esa_raw.loc[common_ids].astype(int)
 outcome_binary = (themes_raw.loc[common_ids] >= 0.5).astype(int)
+
+# Filter outcomes: keep themes present in 10%-90% of interviews
+prevalence = outcome_binary.mean()
+themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
+print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
+outcome_binary = outcome_binary[themes_to_keep]
 
 print_data_summary(predictor_binary, outcome_binary, "ESA habitaatit", "Teemat")
 

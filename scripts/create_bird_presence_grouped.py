@@ -85,12 +85,17 @@ def classify_species(scientific_name, taxonomy):
 
 
 def load_target_recordings():
-    """Load target recording IDs from koodit_16x452.csv."""
+    """Load target recording IDs from the new themes file."""
     rec_ids = []
-    with open('inputs/llm-thematic-data/koodit_16x452.csv', 'r') as f:
-        reader = csv.DictReader(f)
+    # Updated path to the new themes file
+    input_path = 'output/analyysi_koodit/99699c4b/themes_143x452.csv'
+    
+    with open(input_path, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader) # skip header
         for row in reader:
-            rec_ids.append(row[''])
+            if row:
+                rec_ids.append(row[0]) # First column is rec_id
     return rec_ids
 
 
@@ -231,7 +236,7 @@ def main():
     
     # Define group names
     group_names_finnish = ['Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Varpuslinnut',
-                           'Kanalinnut', 'Tikkalinnut', 'Muut']
+                           'Kanalinnut', 'Tikkalinnut', 'Muut', 'Linnut']
     
     group_names_english = {
         'Vesilinnut': 'waterfowl',
@@ -241,6 +246,7 @@ def main():
         'Kanalinnut': 'gamebirds',
         'Tikkalinnut': 'woodpeckers',
         'Muut': 'other',
+        'Linnut': 'any_bird'
     }
     
     # Prepare data rows (use ALL target recordings, even those without observations)
@@ -258,6 +264,10 @@ def main():
         for species in species_present:
             group = species_groups.get(species, 'Muut')
             groups_present.add(group)
+        
+        # Add "Any Bird" group if any species are present
+        if species_present:
+            groups_present.add('Linnut')
         
         data_rows.append({
             'rec_id': rec_id,

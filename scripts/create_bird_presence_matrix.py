@@ -36,12 +36,17 @@ def load_species_names():
 
 
 def load_target_recordings():
-    """Load target recording IDs from koodit_16x452.csv."""
+    """Load target recording IDs from the new themes file."""
     rec_ids = []
-    with open('inputs/llm-thematic-data/koodit_16x452.csv', 'r') as f:
-        reader = csv.DictReader(f)
+    # Updated path to the new themes file
+    input_path = 'output/analyysi_koodit/99699c4b/themes_143x452.csv'
+    
+    with open(input_path, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader) # skip header
         for row in reader:
-            rec_ids.append(row[''])
+            if row:
+                rec_ids.append(row[0]) # First column is rec_id
     return rec_ids
 
 

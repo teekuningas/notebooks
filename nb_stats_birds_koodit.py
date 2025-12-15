@@ -57,11 +57,17 @@ os.makedirs(output_dir, exist_ok=True)
 # %%
 birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
-koodit_raw = pd.read_csv('./output/legacy_analysis/koodit_16x452.csv', index_col=0)
+koodit_raw = pd.read_csv('./output/analyysi_koodit/99699c4b/themes_143x452.csv', index_col=0)
 
 common_ids = birds_raw.index.intersection(koodit_raw.index)
 predictor_binary = birds_raw.loc[common_ids].astype(int)
-outcome_binary = (koodit_raw.loc[common_ids] == 1.0).astype(int)
+outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
+
+# Filter outcomes: keep themes present in 10%-90% of interviews
+prevalence = outcome_binary.mean()
+themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
+print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
+outcome_binary = outcome_binary[themes_to_keep]
 
 print_data_summary(predictor_binary, outcome_binary, "Bird groups", "Koodit")
 
