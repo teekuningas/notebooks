@@ -18,7 +18,7 @@ import json
 from utils import read_interview_data, filter_interview_simple
 
 # --- Configuration ---
-INPUT_FILE = "output/consolidation/a2c6fc1b_seed10/final_themes.json"
+INPUT_FILE = "output/consolidation/435b3eaa_seed10/final_themes.json"
 
 # --- Load Themes ---
 with open(INPUT_FILE, 'r', encoding='utf-8') as f:

@@ -222,10 +222,46 @@ if all_artifacts:
 
 print(f"Clean unique codes: {len(grouped_codes)}")
 
+def synthesize_definition(name, explanations):
+    """Ask LLM to synthesize a representative definition from multiple explanations."""
+    sample = explanations[:10]
+    examples_str = "\n".join([f"- {e}" for e in sample])
+    
+    prompt = f"""Luo yksi yleinen määritelmä teemalle "{name}" seuraavien esimerkkien perusteella.
+
+ESIMERKKEJÄ:
+{examples_str}
+
+OHJEET:
+1. Määritelmän tulee olla yksi selkeä virke.
+2. Määritelmän tulee kattaa esimerkkien yhteinen merkitys.
+3. Älä mainitse yksittäisiä esimerkkejä tai sitaatteja.
+4. Kirjoita yleisellä tasolla, ei liian spesifisesti.
+
+Vastaa JSON: {{ "definition": "..." }}"""
+
+    output_format = {
+        "type": "object",
+        "properties": {"definition": {"type": "string"}},
+        "required": ["definition"]
+    }
+    
+    try:
+        response = generate_simple(prompt, "Määrittele.", output_format=output_format, provider="llamacpp", seed=RANDOM_SEED or 0)
+        return json.loads(response)['definition']
+    except:
+        return max(explanations, key=len)  # Fallback to longest
+
 # Build initial themes
 themes = []
 
-print("Building initial themes...")
+print("Building and synthesizing theme definitions...")
+
+# Create a single RNG instance that maintains state across iterations
+if RANDOM_SEED is not None:
+    rng = np.random.RandomState(RANDOM_SEED)
+else:
+    rng = None
 
 # Sort keys for deterministic order
 sorted_keys = sorted(grouped_codes.keys())
@@ -233,10 +269,21 @@ for key in sorted_keys:
     items = grouped_codes[key]
     names = [item['code'].strip() for item in items]
     most_common_name = max(set(names), key=names.count)
-
+    
+    explanations = list(set([item['explanation'] for item in items]))
+    if rng is not None:
+        explanations = sorted(explanations)
+        rng.shuffle(explanations)
+    
+    if len(explanations) > 1:
+        definition = synthesize_definition(most_common_name, explanations)
+    else:
+        definition = explanations[0]
+    
     theme = {
         "id": str(uuid4()),
         "name": most_common_name,
+        "definition": definition,
         "source_codes": items,
         "embedding": None
     }
@@ -248,7 +295,7 @@ print(f"\nInitial themes: {len(themes)}")
 # --- Embed Themes ---
 
 for theme in themes:
-    text_to_embed = theme['name'] # Embed only name
+    text_to_embed = f"{theme['name']}: {theme['definition']}"
     theme['embedding'] = embed(text_to_embed, provider="llamacpp")
 
 print(f"Embedded {len(themes)} themes")
@@ -268,30 +315,31 @@ def get_cosine_similarity_matrix(current_themes):
 
 
 def merge_themes(theme_a, theme_b):
-    """Ask LLM to synthesize a new theme name from two merged themes."""
+    """Ask LLM to synthesize a new theme name and definition from two merged themes."""
     combined_sources = theme_a['source_codes'] + theme_b['source_codes']
     
-    prompt = f"""Yhdistä nämä kaksi synonyymistä teemaa yhdeksi uudeksi teemaksi.
+    prompt = f"""Yhdistä nämä kaksi synonyymistä käsitettä yhdeksi teemaksi.
 
-TEEMA 1: {theme_a['name']}
-TEEMA 2: {theme_b['name']}
+KÄSITE 1: {theme_a['name']} ({theme_a['definition']})
+KÄSITE 2: {theme_b['name']} ({theme_b['definition']})
 
-Valitse nimi, joka kuvaa parhaiten näiden kahden käsitteen yhteistä merkitystä.
+Luo uusi nimi ja määritelmä joka kattaa molemmat.
 
 OHJEET:
 1. Nimen on oltava yksinkertainen, yleiskielinen ilmaisu.
-2. Jos toinen alkuperäisistä nimistä on hyvä ja kuvaa molempia, käytä sitä.
-3. Vältä liian yleisiä yläkäsitteitä.
-4. Uuden käsitteen tulisi säilyttää alkuperäisten käsitteiden "kokoluokka".
+2. Jos toinen alkuperäisistä nimistä kuvaa hyvin molempia, käytä sitä.
+3. Älä keksi uusia monimutkaisia termejä.
+4. Määritelmän tulee olla yksi selkeä virke.
 
-Vastaa JSON-muodossa: {{ "name": "..." }}"""
-
+Vastaa JSON-muodossa: {{ "name": "...", "definition": "..." }}"""
+    
     output_format = {
         "type": "object",
         "properties": {
-            "name": {"type": "string"}
+            "name": {"type": "string"},
+            "definition": {"type": "string"}
         },
-        "required": ["name"]
+        "required": ["name", "definition"]
     }
     
     try:
@@ -300,15 +348,17 @@ Vastaa JSON-muodossa: {{ "name": "..." }}"""
     except Exception as e:
         print(f"Merge LLM error: {e}. Fallback to combining names.")
         data = {
-            "name": f"{theme_a['name']} & {theme_b['name']}"
+            "name": f"{theme_a['name']} & {theme_b['name']}",
+            "definition": f"Yhdistelmä teemoista {theme_a['name']} ja {theme_b['name']}."
         }
 
     # Compute new embedding for the combined theme
-    new_emb = embed(data['name'], provider="llamacpp")
+    new_emb = embed(f"{data['name']}: {data['definition']}", provider="llamacpp")
     
     new_theme = {
         "id": str(uuid4()),
         "name": data['name'],
+        "definition": data['definition'],
         "source_codes": combined_sources,
         "embedding": new_emb
     }
@@ -317,21 +367,27 @@ Vastaa JSON-muodossa: {{ "name": "..." }}"""
 
 def check_merge_validity(theme_a, theme_b):
     """
-    Ask LLM to evaluate semantic similarity between two themes based ONLY on their names.
+    Ask LLM to evaluate semantic similarity between two themes.
     Returns raw score in [0, 1].
     """
     prompt = f"""Arvioi kahden teeman samankaltaisuutta.
 
 TEEMA 1: {theme_a['name']}
+Määritelmä: {theme_a['definition']}
+
 TEEMA 2: {theme_b['name']}
+Määritelmä: {theme_b['definition']}
 
 Anna samankaltaisuuspisteet (0.0 - 1.0):
 
-KORKEA (0.9 - 1.0): Teemat ovat sama käsite (synonyymejä).
+KORKEA (0.9 - 1.0): Teemat ovat sama käsite
+  - Synonyymejä tai identtisiä ilmauksia
+  - Vaihdettavissa toisiinsa koodauksessa
   
-KESKITASO (0.6 - 0.9): Teemat ovat läheisiä mutta eri käsitteitä.
+KESKITASO (0.6 - 0.9): Teemat ovat läheisiä mutta eri käsitteitä
+  - Liittyviä tai päällekkäisiä merkitykseltään
   
-MATALA (0.0 - 0.6): Teemat ovat erillisiä käsitteitä.
+MATALA (0.0 - 0.6): Teemat ovat erillisiä käsitteitä
 
 ÄLÄ anna korkeaa pistettä, jos:
   - Toinen teema on yleisempi tai spesifimpi kuin toinen
@@ -364,14 +420,14 @@ def log(msg):
     log_lines.append(msg)
 
 # Log header
-log(f"{ '='*60}")
+log(f"{'='*60}")
 log(f"Code Consolidation")
-log(f"{ '='*60}")
+log(f"{'='*60}")
 log(f"Run ID: {RUN_ID}")
 log(f"Random Seed: {RANDOM_SEED}")
 log(f"Merge Threshold: {MERGE_THRESHOLD}")
 log(f"Initial themes: {len(themes)}")
-log(f"{ '='*60}")
+log(f"{'='*60}")
 
 tested_pairs = set()
 total_merges = 0
@@ -393,7 +449,7 @@ def get_cache_key(theme_a, theme_b):
 while True:
     n_themes = len(themes)
     
-    log(f"\n{ '='*60}")
+    log(f"\n{'='*60}")
     log(f"--- Iteration: {n_themes} themes ---")
     
     # Compute embedding similarity and use as priority
@@ -423,6 +479,10 @@ while True:
         if llm_score >= MERGE_THRESHOLD:
             new_theme = merge_themes(t_a, t_b)
             log(f"  ✓ '{t_a['name']}' + '{t_b['name']}' → '{new_theme['name']}' ({len(new_theme['source_codes'])} codes) [LLM: {llm_score:.2f}]")
+            log(f"     A: {t_a['definition']}")
+            log(f"     B: {t_b['definition']}")
+            log(f"     → {new_theme['definition']}")
+            
             themes = [t for k, t in enumerate(themes) if k != i and k != j]
             themes.append(new_theme)
             total_merges += 1
@@ -437,13 +497,13 @@ while True:
         log(f"  Tests: {rejections_this_iteration + 1}, Merges: 1 → {len(themes)} themes remaining")
     else:
         log(f"  Tests: {rejections_this_iteration}, Merges: 0 → stopping")
-        log(f"\n{ '='*60}")
+        log(f"\n{'='*60}")
         log(f"  Total pairs tested: {len(tested_pairs)}")
         log(f"  Total merges: {total_merges}")
         log(f"  Final themes: {len(themes)}")
         break
 
-log(f"\n{ '='*60}")
+log(f"\n{'='*60}")
 log(f"Final: {len(themes)} themes")
 
 # %%
@@ -486,7 +546,8 @@ with open(simple_output_path, 'w', encoding='utf-8') as f:
     
     sorted_themes = sorted(themes, key=lambda t: len(t['source_codes']), reverse=True)
     for idx, t in enumerate(sorted_themes):
-        f.write(f"{idx+1}. {t['name']} ({len(t['source_codes'])} codes)\n\n")
+        f.write(f"{idx+1}. {t['name']} ({len(t['source_codes'])} codes)\n")
+        f.write(f"   {t['definition']}\n\n")
 
 # Save log
 log_path = os.path.join(OUTPUT_DIR, "merge_log.txt")
