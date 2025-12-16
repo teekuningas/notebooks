@@ -50,7 +50,7 @@ STANDARD_FIGSIZE = (12, 9)
 # ══════════════════════════════════════════════════════════════════════════
 
 # Input: consolidated themes from analyysi_koodit
-THEMES_FILE = './output/analyysi_koodit/99699c4b/themes_143x452.csv'
+THEMES_FILE = './output/analyysi_koodit/6525b5f3/themes_51x452.csv'
 
 output_dir = './output/esa_koodit'
 os.makedirs(output_dir, exist_ok=True)
@@ -58,22 +58,22 @@ os.makedirs(output_dir, exist_ok=True)
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-esa_raw = pd.read_csv('./inputs/bird-metadata-refined/esa_habitat_presence_fi.csv')
+esa_raw = pd.read_csv('./inputs/bird-metadata-refined/esa_habitat_presence_en.csv')
 esa_raw = esa_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
 themes_raw = pd.read_csv(THEMES_FILE, index_col=0)
+themes_raw.columns = themes_raw.columns.str.capitalize()
 
 common_ids = esa_raw.index.intersection(themes_raw.index)
 predictor_binary = esa_raw.loc[common_ids].astype(int)
 outcome_binary = (themes_raw.loc[common_ids] >= 0.5).astype(int)
 
-# Filter outcomes: keep themes present in 10%-90% of interviews
 prevalence = outcome_binary.mean()
 themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
 print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
 
-print_data_summary(predictor_binary, outcome_binary, "ESA habitaatit", "Teemat")
+print_data_summary(predictor_binary, outcome_binary, "ESA Habitats", "Themes")
 
 # %% ═════════ 2. Predictor Overlap ═════════
 
@@ -92,16 +92,16 @@ cooccurrence_matrix = calculate_cooccurrence_matrix(predictor_binary)
 
 plot_cooccurrence_heatmap(
     cooccurrence_matrix,
-    title=f'Habitaattien päällekkäisyys (n={len(predictor_binary)})',
-    xlabel='Habitaatti', ylabel='Habitaatti',
+    title=f'Habitat co-occurrence (n={len(predictor_binary)})',
+    xlabel='Habitat', ylabel='Habitat',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
     figsize=STANDARD_FIGSIZE
 )
 
 plot_cooccurrence_percentage_heatmap(
     cooccurrence_matrix,
-    title='Habitaattien päällekkäisyys (%)',
-    xlabel='Habitaatti', ylabel='Habitaatti',
+    title='Habitat co-occurrence (%)',
+    xlabel='Habitat', ylabel='Habitat',
     output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -128,9 +128,9 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # %%
 plot_effect_size_heatmap(
     results_df,
-    title='Habitaatin vaikutus teemaan, efektikoko',
-    xlabel='Habitaatti',
-    ylabel='Teema',
+    title='Effect of habitat on theme (effect size)',
+    xlabel='Habitat',
+    ylabel='Theme',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
     vmax=0.4
@@ -161,7 +161,7 @@ else:
 # %%
 plot_top_associations_barplot(
     results_df,
-    title=f'Vahvimmat habitaatti-teema -yhteydet (V ≥ 0.1)',
+    title=f'Strongest habitat-theme associations (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
     figsize=STANDARD_FIGSIZE
@@ -231,7 +231,7 @@ results_df.to_csv(output_file, index=False)
 print("\n" + "=" * 70)
 print("ANALYYSI VALMIS")
 print("=" * 70)
-print(f"\nAnalysoitu: ESA habitaatit × Teemat")
+print(f"\nAnalyzed: ESA Habitats × Themes")
 print(f"Tulokset: {output_file}")
 print(f"Kuviot: {output_dir}/")
 

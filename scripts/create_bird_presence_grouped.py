@@ -88,7 +88,7 @@ def load_target_recordings():
     """Load target recording IDs from the new themes file."""
     rec_ids = []
     # Updated path to the new themes file
-    input_path = 'output/analyysi_koodit/99699c4b/themes_143x452.csv'
+    input_path = 'output/analyysi_koodit/6525b5f3/themes_51x452.csv'
     
     with open(input_path, 'r') as f:
         reader = csv.reader(f)
@@ -234,9 +234,9 @@ def main():
     print("Step 5: Creating grouped presence/absence matrices (2 versions)...")
     print()
     
-    # Define group names
+    # Define group names (7 functional bird groups)
     group_names_finnish = ['Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Varpuslinnut',
-                           'Kanalinnut', 'Tikkalinnut', 'Muut', 'Linnut']
+                           'Kanalinnut', 'Tikkalinnut', 'Muut']
     
     group_names_english = {
         'Vesilinnut': 'waterfowl',
@@ -245,8 +245,7 @@ def main():
         'Varpuslinnut': 'songbirds',
         'Kanalinnut': 'gamebirds',
         'Tikkalinnut': 'woodpeckers',
-        'Muut': 'other',
-        'Linnut': 'any_bird'
+        'Muut': 'other'
     }
     
     # Prepare data rows (use ALL target recordings, even those without observations)
@@ -264,10 +263,6 @@ def main():
         for species in species_present:
             group = species_groups.get(species, 'Muut')
             groups_present.add(group)
-        
-        # Add "Any Bird" group if any species are present
-        if species_present:
-            groups_present.add('Linnut')
         
         data_rows.append({
             'rec_id': rec_id,
@@ -323,7 +318,7 @@ def main():
     print(f"  - {output_latin.name}")
     print(f"  - {output_finnish.name}")
     print()
-    print(f"Dimensions: {len(data_rows)} recordings × 7 groups")
+    print(f"Dimensions: {len(data_rows)} recordings × 7 bird groups")
     print()
     
     # Count recordings with each group

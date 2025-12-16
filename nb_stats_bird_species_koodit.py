@@ -13,9 +13,9 @@
 #     name: python3
 # ---
 
-# %% ═════════ Statistical Analysis: Paikat → Koodit ═════════
+# %% ═════════ Statistical Analysis: Bird Species → Themes ═════════
 #
-# Examines whether location categories (paikat) predict thematic codes (koodit).
+# Examines whether top bird species predict thematic codes (themes).
 
 # %%
 import pandas as pd
@@ -49,25 +49,42 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-output_dir = './output/paikat_koodit'
+# Select top N most common species (appearing in at least 5% of interviews)
+MIN_PREVALENCE = 0.05  # 5%
+TOP_N_SPECIES = 20
+
+output_dir = './output/bird_species_koodit'
 os.makedirs(output_dir, exist_ok=True)
 
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-paikat_raw = pd.read_csv('./output/legacy_analysis/paikat_10x452.csv', index_col=0)
-koodit_raw = pd.read_csv('./output/analyysi_koodit/99699c4b/themes_143x452.csv', index_col=0)
+# Load all bird species data
+birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_presence_latin.csv')
+birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
-predictor_binary = (paikat_raw == 1.0).astype(int)
-outcome_binary = (koodit_raw >= 0.5).astype(int) # Ensure binary, though input likely float 0.0-1.0
+# Filter to top N species by prevalence
+species_prevalence = birds_raw.mean().sort_values(ascending=False)
+top_species = species_prevalence[species_prevalence >= MIN_PREVALENCE].head(TOP_N_SPECIES)
+print(f"\nSelected top {len(top_species)} species (>= {MIN_PREVALENCE*100}% prevalence):")
+for species, prev in top_species.items():
+    print(f"  {species:35s}: {prev*100:5.1f}%")
 
-# Filter outcomes: keep themes present in 10%-90% of interviews
+birds_raw = birds_raw[top_species.index]
+
+koodit_raw = pd.read_csv('./output/analyysi_koodit/6525b5f3/themes_51x452.csv', index_col=0)
+koodit_raw.columns = koodit_raw.columns.str.capitalize()
+
+common_ids = birds_raw.index.intersection(koodit_raw.index)
+predictor_binary = birds_raw.loc[common_ids].astype(int)
+outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
+
 prevalence = outcome_binary.mean()
 themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
-print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
+print(f"\nFiltering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
 
-print_data_summary(predictor_binary, outcome_binary, "Paikat", "Koodit")
+print_data_summary(predictor_binary, outcome_binary, "Bird species", "Themes")
 
 # %% ═════════ 2. Predictor Overlap ═════════
 
@@ -86,8 +103,8 @@ cooccurrence_matrix = calculate_cooccurrence_matrix(predictor_binary)
 
 plot_cooccurrence_heatmap(
     cooccurrence_matrix,
-    title=f'Paikkojen päällekkäisyys (n={len(predictor_binary)})',
-    xlabel='Paikka', ylabel='Paikka',
+    title=f'Bird species co-occurrence (n={len(predictor_binary)})',
+    xlabel='Species', ylabel='Species',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -95,8 +112,8 @@ plot_cooccurrence_heatmap(
 # Percentage heatmap
 plot_cooccurrence_percentage_heatmap(
     cooccurrence_matrix,
-    title='Paikkojen päällekkäisyys (%)',
-    xlabel='Paikka', ylabel='Paikka',
+    title='Bird species co-occurrence (%)',
+    xlabel='Species', ylabel='Species',
     output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -123,9 +140,9 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # %%
 plot_effect_size_heatmap(
     results_df,
-    title='Paikan vaikutus koodiin, efektikoko',
-    xlabel='Paikka',
-    ylabel='Koodi',
+    title='Effect of bird species on theme (effect size)',
+    xlabel='Species',
+    ylabel='Theme',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
     vmax=0.4
@@ -156,7 +173,7 @@ else:
 # %%
 plot_top_associations_barplot(
     results_df,
-    title=f'Vahvimmat paikka-koodi -yhteydet (V ≥ 0.1)',
+    title=f'Strongest bird species-theme associations (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
     figsize=STANDARD_FIGSIZE
@@ -226,7 +243,7 @@ results_df.to_csv(output_file, index=False)
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
 print("=" * 70)
-print(f"\nAnalyzed: Paikat × Koodit")
+print(f"\nAnalyzed: Bird species × Themes")
 print(f"Results: {output_file}")
 print(f"Figures: {output_dir}/")
 

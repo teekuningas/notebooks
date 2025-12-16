@@ -39,7 +39,7 @@ def load_target_recordings():
     """Load target recording IDs from the new themes file."""
     rec_ids = []
     # Updated path to the new themes file
-    input_path = 'output/analyysi_koodit/99699c4b/themes_143x452.csv'
+    input_path = 'output/analyysi_koodit/6525b5f3/themes_51x452.csv'
     
     with open(input_path, 'r') as f:
         reader = csv.reader(f)

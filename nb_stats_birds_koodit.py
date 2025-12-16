@@ -13,9 +13,9 @@
 #     name: python3
 # ---
 
-# %% ═════════ Statistical Analysis: Bird Groups → Koodit ═════════
+# %% ═════════ Statistical Analysis: Bird Groups → Themes ═════════
 #
-# Examines whether bird families predict thematic codes (koodit).
+# Examines whether bird families predict thematic codes (themes).
 
 # %%
 import pandas as pd
@@ -57,19 +57,25 @@ os.makedirs(output_dir, exist_ok=True)
 # %%
 birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
-koodit_raw = pd.read_csv('./output/analyysi_koodit/99699c4b/themes_143x452.csv', index_col=0)
+
+# Keep only the 7 bird group columns (exclude Any_bird if it exists)
+bird_group_cols = ['Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Varpuslinnut', 
+                   'Kanalinnut', 'Tikkalinnut', 'Muut']
+birds_raw = birds_raw[bird_group_cols]
+
+koodit_raw = pd.read_csv('./output/analyysi_koodit/6525b5f3/themes_51x452.csv', index_col=0)
+koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
 common_ids = birds_raw.index.intersection(koodit_raw.index)
 predictor_binary = birds_raw.loc[common_ids].astype(int)
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
 
-# Filter outcomes: keep themes present in 10%-90% of interviews
 prevalence = outcome_binary.mean()
 themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
 print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
 
-print_data_summary(predictor_binary, outcome_binary, "Bird groups", "Koodit")
+print_data_summary(predictor_binary, outcome_binary, "Bird groups", "Themes")
 
 # %% ═════════ 2. Predictor Overlap ═════════
 
@@ -88,8 +94,8 @@ cooccurrence_matrix = calculate_cooccurrence_matrix(predictor_binary)
 
 plot_cooccurrence_heatmap(
     cooccurrence_matrix,
-    title=f'Lintuperheiden päällekkäisyys (n={len(predictor_binary)})',
-    xlabel='Lintuperhe', ylabel='Lintuperhe',
+    title=f'Bird group co-occurrence (n={len(predictor_binary)})',
+    xlabel='Bird group', ylabel='Bird group',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -97,8 +103,8 @@ plot_cooccurrence_heatmap(
 # Percentage heatmap
 plot_cooccurrence_percentage_heatmap(
     cooccurrence_matrix,
-    title='Lintuperheiden päällekkäisyys (%)',
-    xlabel='Lintuperhe', ylabel='Lintuperhe',
+    title='Bird group co-occurrence (%)',
+    xlabel='Bird group', ylabel='Bird group',
     output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
     figsize=STANDARD_FIGSIZE
 )
@@ -125,9 +131,9 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # %%
 plot_effect_size_heatmap(
     results_df,
-    title='Lintuperheen vaikutus koodiin, efektikoko',
-    xlabel='Lintuperhe',
-    ylabel='Koodi',
+    title='Effect of bird group on theme (effect size)',
+    xlabel='Bird group',
+    ylabel='Theme',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
     vmax=0.4
@@ -158,7 +164,7 @@ else:
 # %%
 plot_top_associations_barplot(
     results_df,
-    title=f'Vahvimmat lintuperhe-koodi -yhteydet (V ≥ 0.1)',
+    title=f'Strongest bird group-theme associations (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
     figsize=STANDARD_FIGSIZE
@@ -228,7 +234,7 @@ results_df.to_csv(output_file, index=False)
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
 print("=" * 70)
-print(f"\nAnalyzed: Bird groups × Koodit")
+print(f"\nAnalyzed: Bird groups × Themes")
 print(f"Results: {output_file}")
 print(f"Figures: {output_dir}/")
 
