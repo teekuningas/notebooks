@@ -317,7 +317,7 @@ Vastaa JSON-muodossa: {{ "name": "..." }}"""
 
 def check_merge_validity(theme_a, theme_b):
     """
-    Ask LLM to evaluate semantic similarity between two themes based ONLY on their names.
+    Ask LLM to evaluate semantic similarity between two themes.
     Returns raw score in [0, 1].
     """
     prompt = f"""Arvioi kahden teeman samankaltaisuutta.
@@ -325,13 +325,13 @@ def check_merge_validity(theme_a, theme_b):
 TEEMA 1: {theme_a['name']}
 TEEMA 2: {theme_b['name']}
 
-Anna samankaltaisuuspisteet (0.0 - 1.0):
+Anna samankaltaisuuspisteet (0 - 10):
 
-MAKSIMI (1.0): Teemat tarkoittavat täsmälleen samaa
+0  = Ei lainkaan samankaltainen
+5  = Osittain samankaltainen
+10 = Täysin samankaltainen
 
-MINIMI (0.0): Teemat tarkoittavat aivan eri asiaa
-
-Voit antaa minkä tahansa pistearvon väliltä 0.0 ja 1.0.
+Anna kokonaisluku väliltä 0-10.
 
 ÄLÄ anna korkeaa pistettä, jos:
   - Toinen teema on yleisempi tai spesifimpi kuin toinen
@@ -339,17 +339,18 @@ Voit antaa minkä tahansa pistearvon väliltä 0.0 ja 1.0.
   - Teemat kuvaavat eri puolia samasta ilmiöstä
   - Teemat ovat yhteydessä toisiinsa mutta eivät tarkoita samaa
 
-Vastaa vain JSON: {{ "score": 0.00 }}"""
+Vastaa vain JSON: {{ "score": 0 }}"""
     
     output_format = {
         "type": "object",
-        "properties": {"score": {"type": "number"}},
+        "properties": {"score": {"type": "integer"}},
         "required": ["score"]
     }
     
     try:
         response = generate_simple(prompt, "Analysoi.", output_format=output_format, provider="llamacpp", seed=RANDOM_SEED or 0)
-        return float(json.loads(response)['score'])
+        # Convert 0-10 scale to 0.0-1.0
+        return float(json.loads(response)['score']) / 10.0
     except:
         return 0.0
 
