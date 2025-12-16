@@ -25,8 +25,8 @@ from llm import embed, generate_simple
 # --- Configuration ---
 INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
 
-MERGE_THRESHOLD = 0.75
-MAX_REJECTIONS_PER_ITERATION = 50
+MERGE_THRESHOLD = 0.8
+MAX_REJECTIONS_PER_ITERATION = 100
 ARTIFACT_BATCH_SIZE = 20
 RANDOM_SEED = 10
 
@@ -327,11 +327,11 @@ TEEMA 2: {theme_b['name']}
 
 Anna samankaltaisuuspisteet (0.0 - 1.0):
 
-KORKEA (0.9 - 1.0): Teemat ovat sama käsite (synonyymejä).
-  
-KESKITASO (0.6 - 0.9): Teemat ovat läheisiä mutta eri käsitteitä.
-  
-MATALA (0.0 - 0.6): Teemat ovat erillisiä käsitteitä.
+MAKSIMI (1.0): Teemat tarkoittavat täsmälleen samaa
+
+MINIMI (0.0): Teemat tarkoittavat aivan eri asiaa
+
+Voit antaa minkä tahansa pistearvon väliltä 0.0 ja 1.0.
 
 ÄLÄ anna korkeaa pistettä, jos:
   - Toinen teema on yleisempi tai spesifimpi kuin toinen
