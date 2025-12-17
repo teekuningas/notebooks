@@ -25,8 +25,7 @@ from llm import embed, generate_simple
 # --- Configuration ---
 INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
 
-MERGE_THRESHOLD = 0.75
-MAX_REJECTIONS_PER_ITERATION = 100
+MAX_REJECTIONS_PER_ITERATION = 50
 ARTIFACT_BATCH_SIZE = 20
 RANDOM_SEED = 10
 
@@ -46,8 +45,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 print(f"Run ID: {RUN_ID}")
 print(f"Random Seed: {RANDOM_SEED}")
-print(f"Merge Threshold: {MERGE_THRESHOLD}")
-
 # %%
 # --- Parse Input Codes ---
 
@@ -267,16 +264,17 @@ def get_cosine_similarity_matrix(current_themes):
     return sim
 
 
-def merge_themes(theme_a, theme_b):
-    """Ask LLM to synthesize a new theme name from two merged themes."""
-    combined_sources = theme_a['source_codes'] + theme_b['source_codes']
-    
-    prompt = f"""Yhdistä nämä kaksi samankaltaista teemaa yhdeksi uudeksi teemaksi.
+def generate_merged_theme_name(theme_a, theme_b):
+    """
+    Ask LLM to generate a merged theme name from two themes.
+    Returns the proposed name as a string.
+    """
+    prompt = f"""Yhdistä nämä kaksi teemaa yhdeksi uudeksi teemaksi.
 
 TEEMA 1: {theme_a['name']}
 TEEMA 2: {theme_b['name']}
 
-Valitse uudelle teemalle nimi, joka kuvaa parhaiten näiden kahden käsitteen yhteistä merkitystä.
+Ehdota uudelle teemalle nimi, joka kuvaa parhaiten näiden kahden käsitteen yhteistä merkitystä.
 
 OHJEET:
 1. Nimen on oltava yksinkertainen, yleiskielinen ilmaisu.
@@ -295,73 +293,90 @@ Vastaa JSON-muodossa: {{ "name": "..." }}"""
     }
     
     try:
-        response = generate_simple(prompt, "Yhdistä.", output_format=output_format, provider="llamacpp", seed=RANDOM_SEED or 0)
+        response = generate_simple(prompt, "Ehdota.", output_format=output_format, provider="llamacpp", seed=RANDOM_SEED or 0)
         data = json.loads(response)
+        return data['name']
     except Exception as e:
-        print(f"Merge LLM error: {e}. Fallback to combining names.")
-        data = {
-            "name": f"{theme_a['name']} & {theme_b['name']}"
-        }
-
-    # Compute new embedding for the combined theme
-    new_emb = embed(data['name'], provider="llamacpp")
-    
-    new_theme = {
-        "id": str(uuid4()),
-        "name": data['name'],
-        "source_codes": combined_sources,
-        "embedding": new_emb
-    }
-    return new_theme
+        print(f"Name generation error: {e}. Fallback to combining names.")
+        return f"{theme_a['name']} & {theme_b['name']}"
 
 
-def check_merge_validity(theme_a, theme_b):
+def check_merge_validity(theme_a, theme_b, proposed_name):
     """
-    Ask LLM to evaluate semantic similarity between two themes.
-    Returns raw score in [0, 1].
+    Ask LLM to decide if two themes should be merged to the proposed name.
+    Returns True if should merge, False otherwise.
     """
-    prompt = f"""Arvioi kahden teeman samankaltaisuutta.
+    prompt = f"""Arvioi ovatko kaksi teemaa sama käsite.
 
 TEEMA 1: {theme_a['name']}
 TEEMA 2: {theme_b['name']}
 
-Anna samankaltaisuuspisteet (0.0 - 1.0):
+EHDOTETTU YHDISTETTY NIMI: {proposed_name}
 
-HUOM: Kysytään vain teemapareja jotka ovat jo jonkin verran samankaltaisia.
+TÄRKEÄÄ: Arvioi ENSIN ovatko alkuperäiset teemat tarpeeksi samankaltaisia.
+Vasta sitten arvioi onko ehdotettu nimi hyvä.
 
-0.0-0.2 = Liittyviä, mutta eri käsitteet (EI yhdistetä)
-0.3-0.4 = Samaan aihealueeseen, eri näkökulma
-0.5-0.6 = Samaa aihetta, mutta eri puoli ilmiöstä
-0.7-0.8 = Hyvin samankaltaisia, voisivat olla sama
-0.9     = Käytännössä synonyymit
-1.0     = Identtinen merkitys
+VAIHE 1 - Tarkista alkuperäiset:
+Ovatko TEEMA 1 ja TEEMA 2 synonyymejä tai tarkoittavat käytännössä samaa asiaa?
 
-Anna desimaaliluku väliltä 0.00-1.00 kahden desimaalin tarkkuudella.
+JOS EI → Vastaa FALSE (vaikka ehdotettu nimi olisi kuinka hyvä tahansa!)
 
-TÄRKEÄÄ: Käytä koko asteikkoa! Älä pyöristä kokonaislukuihin.
-- Esim. jos hieman alle 0.8, anna 0.78 tai 0.79, ÄLÄ 0.8
-- Jos hieman yli 0.7, anna 0.71 tai 0.72, ÄLÄ 0.7
-- Tarkkuus on tärkeää päätöksenteon kannalta!
+VAIHE 2 - Jos alkuperäiset ovat samankaltaisia:
+Kuvaako ehdotettu nimi hyvin molempia?
 
-ÄLÄ anna korkeaa pistettä, jos:
+Vastaa FALSE jos:
+  - Alkuperäiset teemat ovat ERI ASIOITA (tärkein ehto!)
   - Toinen teema on yleisempi tai spesifimpi kuin toinen
-  - Teemat ovat eri kokoluokkaa; toinen on selkeästi laajempi käsite kuin toinen
+  - Teemat ovat eri kokoluokkaa
   - Teemat kuvaavat eri puolia samasta ilmiöstä
-  - Teemat ovat yhteydessä toisiinsa mutta eivät tarkoita samaa
+  - Ehdotettu nimi on liian yleinen tai menettää alkuperäisten merkityksen
+  - On VÄHÄNKÄÄN epävarmuutta!
 
-Vastaa vain JSON: {{ "score": 0.00 }}"""
+ESIMERKKEJÄ:
+  "Rauhallisuus" + "Kasvillisuus" → FALSE (eri asiat!)
+  "Metsä" + "Kaupunki" → FALSE (vastakohdat!)
+  "Rauha" + "Rauhallisuus" → TRUE (synonyymejä)
+
+Ovatko teemat sama käsite?
+
+Vastaa JSON: {{ "are_same": true, "reason": "lyhyt perustelu" }} tai {{ "are_same": false, "reason": "lyhyt perustelu" }}"""
     
     output_format = {
         "type": "object",
-        "properties": {"score": {"type": "number"}},
-        "required": ["score"]
+        "properties": {
+            "are_same": {"type": "boolean"},
+            "reason": {"type": "string"}
+        },
+        "required": ["are_same", "reason"]
     }
     
     try:
-        response = generate_simple(prompt, "Analysoi.", output_format=output_format, provider="llamacpp", seed=RANDOM_SEED or 0)
-        return float(json.loads(response)['score'])
-    except:
-        return 0.0
+        response = generate_simple(prompt, "Arvioi objektiivisesti.", output_format=output_format, provider="llamacpp", seed=RANDOM_SEED or 0)
+        
+        # Debug: Print the raw JSON response
+        print(f"    [LLM] {response}")
+        
+        data = json.loads(response)
+        return data['are_same']
+    except Exception as e:
+        print(f"    [LLM] ERROR: {e}")
+        return False
+
+
+def create_merged_theme(theme_a, theme_b, merged_name):
+    """Create a new merged theme object with combined source codes."""
+    combined_sources = theme_a['source_codes'] + theme_b['source_codes']
+    
+    # Compute new embedding for the combined theme
+    new_emb = embed(merged_name, provider="llamacpp")
+    
+    new_theme = {
+        "id": str(uuid4()),
+        "name": merged_name,
+        "source_codes": combined_sources,
+        "embedding": new_emb
+    }
+    return new_theme
 
 
 # --- Iterative Merge Loop ---
@@ -379,7 +394,6 @@ log(f"Code Consolidation")
 log(f"{ '='*60}")
 log(f"Run ID: {RUN_ID}")
 log(f"Random Seed: {RANDOM_SEED}")
-log(f"Merge Threshold: {MERGE_THRESHOLD}")
 log(f"Initial themes: {len(themes)}")
 log(f"{ '='*60}")
 
@@ -426,13 +440,16 @@ while True:
         if cache_key in tested_pairs:
             continue
         
-        # Ask LLM to judge similarity
-        llm_score = check_merge_validity(t_a, t_b)
+        # Step 1: Generate proposed merged name
+        proposed_name = generate_merged_theme_name(t_a, t_b)
+        
+        # Step 2: Ask LLM to decide if should merge to this name
+        should_merge = check_merge_validity(t_a, t_b, proposed_name)
         tested_pairs.add(cache_key)
         
-        if llm_score >= MERGE_THRESHOLD:
-            new_theme = merge_themes(t_a, t_b)
-            log(f"  ✓ '{t_a['name']}' + '{t_b['name']}' → '{new_theme['name']}' ({len(new_theme['source_codes'])} codes) [LLM: {llm_score:.2f}]")
+        if should_merge:
+            new_theme = create_merged_theme(t_a, t_b, proposed_name)
+            log(f"  ✓ '{t_a['name']}' + '{t_b['name']}' → '{proposed_name}' ({len(new_theme['source_codes'])} codes) [LLM: YES]")
             themes = [t for k, t in enumerate(themes) if k != i and k != j]
             themes.append(new_theme)
             total_merges += 1
@@ -491,7 +508,6 @@ with open(simple_output_path, 'w', encoding='utf-8') as f:
     f.write(f"==========================\n")
     f.write(f"Run ID: {RUN_ID}\n")
     f.write(f"Random seed: {RANDOM_SEED}\n")
-    f.write(f"Merge threshold: {MERGE_THRESHOLD}\n")
     f.write(f"Final themes: {len(themes)}\n\n")
     
     sorted_themes = sorted(themes, key=lambda t: len(t['source_codes']), reverse=True)
