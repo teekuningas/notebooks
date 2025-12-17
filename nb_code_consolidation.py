@@ -25,7 +25,7 @@ from llm import embed, generate_simple
 # --- Configuration ---
 INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
 
-MERGE_THRESHOLD = 0.8
+MERGE_THRESHOLD = 0.75
 MAX_REJECTIONS_PER_ITERATION = 100
 ARTIFACT_BATCH_SIZE = 20
 RANDOM_SEED = 10
@@ -271,12 +271,12 @@ def merge_themes(theme_a, theme_b):
     """Ask LLM to synthesize a new theme name from two merged themes."""
     combined_sources = theme_a['source_codes'] + theme_b['source_codes']
     
-    prompt = f"""Yhdistä nämä kaksi synonyymistä teemaa yhdeksi uudeksi teemaksi.
+    prompt = f"""Yhdistä nämä kaksi samankaltaista teemaa yhdeksi uudeksi teemaksi.
 
 TEEMA 1: {theme_a['name']}
 TEEMA 2: {theme_b['name']}
 
-Valitse nimi, joka kuvaa parhaiten näiden kahden käsitteen yhteistä merkitystä.
+Valitse uudelle teemalle nimi, joka kuvaa parhaiten näiden kahden käsitteen yhteistä merkitystä.
 
 OHJEET:
 1. Nimen on oltava yksinkertainen, yleiskielinen ilmaisu.
@@ -325,13 +325,23 @@ def check_merge_validity(theme_a, theme_b):
 TEEMA 1: {theme_a['name']}
 TEEMA 2: {theme_b['name']}
 
-Anna samankaltaisuuspisteet (0 - 10):
+Anna samankaltaisuuspisteet (0.0 - 1.0):
 
-0  = Ei lainkaan samankaltainen
-5  = Osittain samankaltainen
-10 = Täysin samankaltainen
+HUOM: Kysytään vain teemapareja jotka ovat jo jonkin verran samankaltaisia.
 
-Anna kokonaisluku väliltä 0-10.
+0.0-0.2 = Liittyviä, mutta eri käsitteet (EI yhdistetä)
+0.3-0.4 = Samaan aihealueeseen, eri näkökulma
+0.5-0.6 = Samaa aihetta, mutta eri puoli ilmiöstä
+0.7-0.8 = Hyvin samankaltaisia, voisivat olla sama
+0.9     = Käytännössä synonyymit
+1.0     = Identtinen merkitys
+
+Anna desimaaliluku väliltä 0.00-1.00 kahden desimaalin tarkkuudella.
+
+TÄRKEÄÄ: Käytä koko asteikkoa! Älä pyöristä kokonaislukuihin.
+- Esim. jos hieman alle 0.8, anna 0.78 tai 0.79, ÄLÄ 0.8
+- Jos hieman yli 0.7, anna 0.71 tai 0.72, ÄLÄ 0.7
+- Tarkkuus on tärkeää päätöksenteon kannalta!
 
 ÄLÄ anna korkeaa pistettä, jos:
   - Toinen teema on yleisempi tai spesifimpi kuin toinen
@@ -339,18 +349,17 @@ Anna kokonaisluku väliltä 0-10.
   - Teemat kuvaavat eri puolia samasta ilmiöstä
   - Teemat ovat yhteydessä toisiinsa mutta eivät tarkoita samaa
 
-Vastaa vain JSON: {{ "score": 0 }}"""
+Vastaa vain JSON: {{ "score": 0.00 }}"""
     
     output_format = {
         "type": "object",
-        "properties": {"score": {"type": "integer"}},
+        "properties": {"score": {"type": "number"}},
         "required": ["score"]
     }
     
     try:
         response = generate_simple(prompt, "Analysoi.", output_format=output_format, provider="llamacpp", seed=RANDOM_SEED or 0)
-        # Convert 0-10 scale to 0.0-1.0
-        return float(json.loads(response)['score']) / 10.0
+        return float(json.loads(response)['score'])
     except:
         return 0.0
 
