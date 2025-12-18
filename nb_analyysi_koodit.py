@@ -18,7 +18,7 @@ import json
 from utils import read_interview_data, filter_interview_simple
 
 # --- Configuration ---
-INPUT_FILE = "output/consolidation/435b3eaa_seed10/final_themes.json"
+INPUT_FILE = "output/consolidation/77db8e4e_seed11/final_themes.json"
 
 # --- Load Themes ---
 with open(INPUT_FILE, 'r', encoding='utf-8') as f:
@@ -40,6 +40,14 @@ print(f"Themes: {len(codes)}")
 # --- Code Presence Analysis ---
 
 from llm import generate_simple
+import os
+from uuid import uuid4
+
+# Create output directory and debug log file
+run_id = str(uuid4())[:8]
+output_dir = f"output/analyysi_koodit/{run_id}"
+os.makedirs(output_dir, exist_ok=True)
+debug_log_path = os.path.join(output_dir, "debug_log.txt")
 
 output_format = {
     "type": "object",
@@ -53,15 +61,16 @@ output_format = {
 N_ITERATIONS = 1
 
 results = []
-for row_idx, (rec_id, text) in enumerate(contents):
-    print(f"Processing interview {row_idx+1}/{len(contents)}: {rec_id}")
-    
-    for code in codes:
-        iter_idx = 0
-        seed = 0
+with open(debug_log_path, 'w', encoding='utf-8') as debug_file:
+    for row_idx, (rec_id, text) in enumerate(contents):
+        print(f"Processing interview {row_idx+1}/{len(contents)}: {rec_id}")
         
-        while iter_idx < N_ITERATIONS:
-            prompt = f"""Päätä esiintyykö seuraava teema tekstinäytteessä.
+        for code in codes:
+            iter_idx = 0
+            seed = 0
+            
+            while iter_idx < N_ITERATIONS:
+                prompt = f"""Päätä esiintyykö seuraava teema tekstinäytteessä.
 
 TEEMA: {code}
 
@@ -75,40 +84,39 @@ Anna lyhyt perustelu päätöksellesi.
 
 Vastaa JSON: {{ "theme_present": true, "reason": "lyhyt perustelu" }} tai {{ "theme_present": false, "reason": "lyhyt perustelu" }}"""
 
-            try:
-                response = generate_simple(prompt, "Arvioi objektiivisesti.", seed=seed, 
-                                         output_format=output_format, provider="llamacpp")
-                
-                # Debug: Print the raw JSON response
-                print(f"    [{code}] {response}")
-                
-                data = json.loads(response)
-                theme_present = data['theme_present']
-                
-                results.append({
-                    "fname": rec_id,
-                    "code": code,
-                    "iter": iter_idx,
-                    "result": theme_present
-                })
-                
-                iter_idx += 1
-                seed += 1
-                
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"    [{code}] ERROR: {e}")
-                seed += 1
-                continue
+                try:
+                    response = generate_simple(prompt, "Arvioi objektiivisesti.", seed=seed, 
+                                             output_format=output_format, provider="llamacpp")
+                    
+                    # Debug: Write to file instead of print
+                    debug_file.write(f"[{rec_id}] [{code}] {response}\n")
+                    debug_file.flush()
+                    
+                    data = json.loads(response)
+                    theme_present = data['theme_present']
+                    
+                    results.append({
+                        "fname": rec_id,
+                        "code": code,
+                        "iter": iter_idx,
+                        "result": theme_present
+                    })
+                    
+                    iter_idx += 1
+                    seed += 1
+                    
+                except (json.JSONDecodeError, KeyError) as e:
+                    debug_file.write(f"[{rec_id}] [{code}] ERROR: {e}\n")
+                    debug_file.flush()
+                    seed += 1
+                    continue
 
 print(f"\nGenerated {len(results)} results")
+print(f"Debug log saved to: {debug_log_path}")
 # %%
 # --- Results Table ---
 
 import pandas as pd
-import os
-from uuid import uuid4
-
-run_id = str(uuid4())[:8]
 
 # Aggregate results by interview and theme
 table = {}
@@ -133,8 +141,6 @@ for rec_id in table:
 df = pd.DataFrame.from_dict(table, orient='index')
 
 # Save results
-output_dir = f"output/analyysi_koodit/{run_id}"
-os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, f"themes_{len(codes)}x{len(contents)}.csv")
 df.to_csv(output_path)
 
