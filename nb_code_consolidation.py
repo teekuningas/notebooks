@@ -25,9 +25,9 @@ from llm import embed, generate_simple
 # --- Configuration ---
 INPUT_FILE = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
 
-MAX_REJECTIONS_PER_ITERATION = 50
+MAX_REJECTIONS_PER_ITERATION = 100
 ARTIFACT_BATCH_SIZE = 20
-RANDOM_SEED = 10
+RANDOM_SEED = 11
 
 # Set random seed for reproducibility
 if RANDOM_SEED is not None:
@@ -331,11 +331,6 @@ Vastaa FALSE jos:
   - Teemat kuvaavat eri puolia samasta ilmiöstä
   - Ehdotettu nimi on liian yleinen tai menettää alkuperäisten merkityksen
   - On VÄHÄNKÄÄN epävarmuutta!
-
-ESIMERKKEJÄ:
-  "Rauhallisuus" + "Kasvillisuus" → FALSE (eri asiat!)
-  "Metsä" + "Kaupunki" → FALSE (vastakohdat!)
-  "Rauha" + "Rauhallisuus" → TRUE (synonyymejä)
 
 Ovatko teemat sama käsite?
 

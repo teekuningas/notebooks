@@ -44,9 +44,10 @@ from llm import generate_simple
 output_format = {
     "type": "object",
     "properties": {
-        "code_present": {"type": "boolean"}
+        "theme_present": {"type": "boolean"},
+        "reason": {"type": "string"}
     },
-    "required": ["code_present"]
+    "required": ["theme_present", "reason"]
 }
 
 N_ITERATIONS = 1
@@ -60,42 +61,42 @@ for row_idx, (rec_id, text) in enumerate(contents):
         seed = 0
         
         while iter_idx < N_ITERATIONS:
-            prompt = f"""Päätä, esiintyykö seuraava teema tekstinäytteessä.
+            prompt = f"""Päätä esiintyykö seuraava teema tekstinäytteessä.
 
 TEEMA: {code}
 
 TEKSTINÄYTE:
 {text}
 
-Vastaa "kyllä" jos teema esiintyy, "ei" jos ei esiinny."""
+Vastaa TRUE jos teema esiintyy tekstissä.
+Vastaa FALSE jos teema ei esiinny tekstissä.
+
+Anna lyhyt perustelu päätöksellesi.
+
+Vastaa JSON: {{ "theme_present": true, "reason": "lyhyt perustelu" }} tai {{ "theme_present": false, "reason": "lyhyt perustelu" }}"""
 
             try:
-                free_form = generate_simple(prompt, "", seed=seed, provider="llamacpp")
+                response = generate_simple(prompt, "Arvioi objektiivisesti.", seed=seed, 
+                                         output_format=output_format, provider="llamacpp")
                 
-                if not free_form:
-                    seed += 1
-                    continue
-
-                format_prompt = """Muotoile vapaamuotoinen vastaus JSON-muotoon.
-Jos vastaus on myönteinen: code_present = true
-Jos vastaus on kielteinen: code_present = false"""
-
-                json_str = generate_simple(format_prompt, free_form, seed=10, 
-                                          output_format=output_format, provider="llamacpp")
+                # Debug: Print the raw JSON response
+                print(f"    [{code}] {response}")
                 
-                code_present = json.loads(json_str)['code_present']
+                data = json.loads(response)
+                theme_present = data['theme_present']
                 
                 results.append({
                     "fname": rec_id,
                     "code": code,
                     "iter": iter_idx,
-                    "result": code_present
+                    "result": theme_present
                 })
                 
                 iter_idx += 1
                 seed += 1
                 
             except (json.JSONDecodeError, KeyError) as e:
+                print(f"    [{code}] ERROR: {e}")
                 seed += 1
                 continue
 
