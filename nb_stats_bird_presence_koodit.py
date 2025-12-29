@@ -31,7 +31,8 @@ from utils_stats import (
     print_summary_stats,
     print_data_summary,
     plot_binary_predictor_distribution,
-    save_summary_table_image
+    save_summary_table_image,
+    plot_effect_size_heatmap
 )
 
 sns.set_style("whitegrid")
@@ -113,15 +114,17 @@ print(f"  Medium+ effect size (V > 0.20):      {(results_df['Cramers_V'] > 0.2).
 print(f"\nTop 20 associations:")
 print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Difference']].head(20).to_string(index=False))
 
-# %% ═════════ 4. Effect Size Visualization ═════════
+# %% ═════════ 4. Heatmap ═════════
 
 # %%
-plot_top_associations_barplot(
+plot_effect_size_heatmap(
     results_df,
-    title='Effect of bird presence on themes (V ≥ 0.1)',
-    output_path=f'{output_dir}/02_top_associations.png',
-    min_effect=0.1,
+    title='Effect of bird presence on theme (effect size)',
+    xlabel='Bird Presence',
+    ylabel='Theme',
+    output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
+    vmax=0.4,
     footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
 
@@ -150,7 +153,19 @@ if len(significant) > 0:
 else:
     print("No significant associations found.")
 
-# %% ═════════ 6. Summary ═════════
+# %% ═════════ 6. Bar Plot ═════════
+
+# %%
+plot_top_associations_barplot(
+    results_df,
+    title='Effect of bird presence on themes (V ≥ 0.1)',
+    output_path=f'{output_dir}/04_top_associations.png',
+    min_effect=0.1,
+    figsize=STANDARD_FIGSIZE,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
+)
+
+# %% ═════════ 7. Summary ═════════
 
 # %%
 print_summary_stats(results_df)

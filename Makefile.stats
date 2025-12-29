@@ -9,22 +9,28 @@ run-bird-presence-koodit:
 run-bird-species-koodit:
 	MPLBACKEND=Agg python3 nb_stats_bird_species_koodit.py
 
+run-methodology:
+	python3 nb_methodology_summary.py
+
 pdf-esa-koodit:
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/esa_koodit.pdf" "ESA × Themes" "output/esa_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/esa_themes.pdf" "ESA × Themes" "output/esa_koodit" 50
 
 pdf-bird-groups-koodit:
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/bird_groups_koodit.pdf" "Bird groups × Themes" "output/bird_groups_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/bird_groups_themes.pdf" "Bird groups × Themes" "output/bird_groups_koodit" 50
 
 pdf-bird-presence-koodit:
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_presence_koodit.pdf" "Bird presence × Themes" "output/bird_presence_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_presence_themes.pdf" "Bird presence × Themes" "output/bird_presence_koodit" 50
 
 pdf-bird-species-koodit:
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_species_koodit.pdf" "Bird species × Themes" "output/bird_species_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_species_themes.pdf" "Bird species × Themes" "output/bird_species_koodit" 50
 
-pdf-all: pdf-esa-koodit pdf-bird-species-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit
+pdf-methodology:
+	nix shell nixpkgs/25.05#pandoc nixpkgs/25.05#texlive.combined.scheme-small --command pandoc output/METHODOLOGY_SUMMARY.md -o output/methodology_summary.pdf
+
+pdf-all: pdf-esa-koodit pdf-bird-species-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit pdf-methodology
 	@echo "✓ All PDFs generated!"
 
-run-all: run-esa-koodit run-bird-species-koodit run-bird-presence-koodit run-bird-groups-koodit
+run-all: run-esa-koodit run-bird-species-koodit run-bird-presence-koodit run-bird-groups-koodit run-methodology
 	@echo "✓ All images generated!"
 
-.PHONY: pdf-esa-koodit pdf-bird-groups-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit pdf-all run-esa-koodit run-bird-groups-koodit run-bird-presence-koodit run-bird-groups-koodit run-all
+.PHONY: pdf-esa-koodit pdf-bird-groups-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit pdf-all run-esa-koodit run-bird-groups-koodit run-bird-presence-koodit run-bird-groups-koodit run-all pdf-methodology run-methodology
