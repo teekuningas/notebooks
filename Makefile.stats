@@ -1,55 +1,30 @@
 # Statistical analysis targets for notebooks
 
-run-paikat-koodit:
-	@echo "Generating Paikat × Koodit analysis..."
-	python nb_stats_paikat_koodit.py
-
-run-paikat-merkitykset:
-	@echo "Generating Paikat × Merkitykset analysis..."
-	python nb_stats_paikat_merkitykset.py
-
-run-birds-koodit:
-	@echo "Generating Bird groups × Koodit analysis..."
-	python nb_stats_birds_koodit.py
-
-run-birds-merkitykset:
-	@echo "Generating Bird groups × Merkitykset analysis..."
-	python nb_stats_birds_merkitykset.py
-
+run-esa-koodit:
+	python3 nb_stats_esa_koodit.py
+run-bird-groups-koodit:
+	python3 nb_stats_bird_groups_koodit.py
 run-bird-presence-koodit:
-	@echo "Generating Bird presence × Koodit analysis..."
-	python nb_stats_bird_presence_koodit.py
+	python3 nb_stats_bird_presence_koodit.py
+run-bird-species-koodit:
+	python3 nb_stats_bird_species_koodit.py
 
-run-bird-presence-merkitykset:
-	@echo "Generating Bird presence × Merkitykset analysis..."
-	python nb_stats_bird_presence_merkitykset.py
+pdf-esa-koodit:
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/esa_koodit.pdf" "ESA × Themes" "output/esa_koodit" 50
 
-run-esa-paikat:
-	@echo "Generating ESA habitats × Paikat analysis..."
-	python nb_stats_esa_paikat.py
+pdf-bird-groups-koodit:
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/bird_groups_koodit.pdf" "Bird groups × Themes" "output/bird_groups_koodit" 50
 
-pdf-paikat-koodit: run-paikat-koodit
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_paikat_koodit.pdf" "Paikat × Koodit" "output/paikat_koodit" 50
+pdf-bird-presence-koodit:
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_presence_koodit.pdf" "Bird presence × Themes" "output/bird_presence_koodit" 50
 
-pdf-paikat-merkitykset: run-paikat-merkitykset
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_paikat_merkitykset.pdf" "Paikat × Merkitykset" "output/paikat_merkitykset" 50
+pdf-bird-species-koodit:
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_species_koodit.pdf" "Bird species × Themes" "output/bird_species_koodit" 50
 
-pdf-birds-koodit: run-birds-koodit
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_birds_koodit.pdf" "Bird groups × Koodit" "output/birds_koodit" 50
-
-pdf-birds-merkitykset: run-birds-merkitykset
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_birds_merkitykset.pdf" "Bird groups × Merkitykset" "output/birds_merkitykset" 50
-
-pdf-bird-presence-koodit: run-bird-presence-koodit
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_presence_koodit.pdf" "Bird presence × Koodit" "output/bird_presence_koodit" 50
-
-pdf-esa-paikat: run-esa-paikat
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_esa_paikat.pdf" "ESA habitats × Paikat" "output/esa_paikat" 50
-
-run-all: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-birds-merkitykset run-bird-presence-koodit run-bird-presence-merkitykset run-esa-paikat
-	@echo "✓ All analyses complete!"
-
-pdf-all: pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-birds-merkitykset pdf-bird-presence-koodit pdf-esa-paikat
+pdf-all: pdf-esa-koodit pdf-bird-species-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit
 	@echo "✓ All PDFs generated!"
 
-.PHONY: run-paikat-koodit run-paikat-merkitykset run-birds-koodit run-birds-merkitykset run-bird-presence-koodit run-esa-paikat pdf-paikat-koodit pdf-paikat-merkitykset pdf-birds-koodit pdf-birds-merkitykset pdf-bird-presence-koodit pdf-esa-paikat run-all pdf-all
+run-all: run-esa-koodit run-bird-species-koodit run-bird-presence-koodit run-bird-groups-koodit
+	@echo "✓ All images generated!"
+
+.PHONY: pdf-esa-koodit pdf-bird-groups-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit pdf-all run-esa-koodit run-bird-groups-koodit run-bird-presence-koodit run-bird-groups-koodit run-all

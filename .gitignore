@@ -4,6 +4,7 @@ __pycache__
 # let's not version the data
 data
 output
+output_old
 koodidata
 inputs
 

@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """
-Create bird species presence matrices.
+Create bird species presence matrices at 90% confidence threshold.
 
 This script:
-1. Loads target recording IDs from koodit_16x452.csv
-2. Filters species observations with prediction >= 50%
+1. Loads target recording IDs from themes analysis
+2. Filters species observations with prediction >= 90% (confident identification)
 3. Creates two CSV files with bird presence (0/1) per recording:
-   - bird_presence_latin.csv (scientific names)
-   - bird_presence_finnish.csv (Finnish names)
+   - bird_species_confident_latin.csv (scientific names)
+   - bird_species_confident_finnish.csv (Finnish names)
 
-Output: inputs/bird-metadata-refined/bird_presence_*.csv
+Output: inputs/bird-metadata-refined/bird_species_confident_*.csv
 
-Dimensions: ~450 recordings × ~126 species
+Threshold rationale:
+- 90% confidence ensures reliable species identification
+- Used for species-level analysis: "Which specific birds were present?"
+- Complements presence/absence analysis (50% threshold)
+
+Dimensions: ~450 recordings × ~80-100 species (fewer than 50% threshold due to stricter filtering)
 """
 
 import csv
@@ -133,8 +138,8 @@ def main():
     print()
     
     # Step 4: Extract bird observations
-    print("Step 4: Extracting bird observations (>=50% confidence)...")
-    bird_observations = extract_bird_observations(target_rec_ids_set, threshold=0.5)
+    print("Step 4: Extracting bird observations (>=90% confidence)...")
+    bird_observations = extract_bird_observations(target_rec_ids_set, threshold=0.9)
     print(f"✓ Found observations for {len(bird_observations)} recordings")
     print()
     
@@ -174,8 +179,8 @@ def main():
     output_dir = Path('inputs/bird-metadata-refined')
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    output_latin = output_dir / 'bird_presence_latin.csv'
-    output_finnish = output_dir / 'bird_presence_finnish.csv'
+    output_latin = output_dir / 'bird_species_confident_latin.csv'
+    output_finnish = output_dir / 'bird_species_confident_finnish.csv'
     
     print("Step 5: Creating presence/absence matrices (2 versions)...")
     print()

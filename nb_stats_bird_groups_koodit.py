@@ -15,7 +15,7 @@
 
 # %% ═════════ Statistical Analysis: Bird Groups → Themes ═════════
 #
-# Examines whether bird families predict thematic codes (themes).
+# Examines whether bird functional groups predict thematic codes (themes).
 
 # %%
 import pandas as pd
@@ -34,7 +34,8 @@ from utils_stats import (
     plot_effect_size_heatmap,
     plot_top_associations_barplot,
     print_summary_stats,
-    print_data_summary
+    print_data_summary,
+    save_summary_table_image
 )
 
 sns.set_style("whitegrid")
@@ -49,7 +50,7 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-output_dir = './output/birds_koodit'
+output_dir = './output/bird_groups_koodit'
 os.makedirs(output_dir, exist_ok=True)
 
 # %% ═════════ 1. Load and Prepare Data ═════════
@@ -58,22 +59,31 @@ os.makedirs(output_dir, exist_ok=True)
 birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
-# Keep only the 7 bird group columns (exclude Any_bird if it exists)
-bird_group_cols = ['Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Varpuslinnut', 
-                   'Kanalinnut', 'Tikkalinnut', 'Muut']
+# Use all columns from the new grouped file (excluding metadata)
+# The new file has specific functional groups (e.g., Vesilinnut, Rastaat, etc.)
+bird_group_cols = birds_raw.columns.tolist()
 birds_raw = birds_raw[bird_group_cols]
 
-koodit_raw = pd.read_csv('./output/analyysi_koodit/6525b5f3/themes_51x452.csv', index_col=0)
+koodit_raw = pd.read_csv('./output/analyysi_koodit/88d43208/themes_98x452.csv', index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
 common_ids = birds_raw.index.intersection(koodit_raw.index)
 predictor_binary = birds_raw.loc[common_ids].astype(int)
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
 
+# Filter themes by prevalence
 prevalence = outcome_binary.mean()
-themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
-print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
+themes_to_keep = prevalence[(prevalence >= 0.20) & (prevalence <= 0.80)].index
+print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (20%-80% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
+
+# Filter bird groups by prevalence (remove very rare groups to avoid chi-square errors)
+# Minimum 10 occurrences required
+min_occurrences = 10
+pred_counts = predictor_binary.sum()
+groups_to_keep = pred_counts[pred_counts >= min_occurrences].index
+print(f"Filtering bird groups: {len(predictor_binary.columns)} -> {len(groups_to_keep)} (min {min_occurrences} occurrences)")
+predictor_binary = predictor_binary[groups_to_keep]
 
 print_data_summary(predictor_binary, outcome_binary, "Bird groups", "Themes")
 
@@ -228,6 +238,13 @@ if len(sig_assocs) > 0:
 # %% ═════════ 9. Save ═════════
 
 # %%
+# Save summary image for PDF
+save_summary_table_image(
+    results_df,
+    title="Bird Groups × Themes: Statistical Summary",
+    output_path=f'{output_dir}/99_summary.png'
+)
+
 output_file = f'{output_dir}/chi_square_results.csv'
 results_df.to_csv(output_file, index=False)
 

@@ -34,7 +34,8 @@ from utils_stats import (
     plot_effect_size_heatmap,
     plot_top_associations_barplot,
     print_summary_stats,
-    print_data_summary
+    print_data_summary,
+    save_summary_table_image
 )
 
 sns.set_style("whitegrid")
@@ -49,9 +50,12 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-# Select top N most common species (appearing in at least 5% of interviews)
-MIN_PREVALENCE = 0.05  # 5%
-TOP_N_SPECIES = 20
+# Species selection
+TOP_N_SPECIES = 20             # Show top N most common species
+
+# Theme prevalence filtering (avoid extreme distributions)
+MIN_THEME_PREVALENCE = 0.20  # 20%
+MAX_THEME_PREVALENCE = 0.80  # 80%
 
 output_dir = './output/bird_species_koodit'
 os.makedirs(output_dir, exist_ok=True)
@@ -59,20 +63,26 @@ os.makedirs(output_dir, exist_ok=True)
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-# Load all bird species data
-birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_presence_latin.csv')
+# Load all bird species data (90% confidence threshold)
+birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_species_confident_finnish.csv')
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
 # Filter to top N species by prevalence
 species_prevalence = birds_raw.mean().sort_values(ascending=False)
-top_species = species_prevalence[species_prevalence >= MIN_PREVALENCE].head(TOP_N_SPECIES)
-print(f"\nSelected top {len(top_species)} species (>= {MIN_PREVALENCE*100}% prevalence):")
+top_species = species_prevalence.head(TOP_N_SPECIES)
+
+# Additional filter: Minimum 10 occurrences required
+# (Top N usually covers this, but good for safety)
+min_occurrences = 10
+top_species = top_species[top_species * len(birds_raw) >= min_occurrences]
+
+print(f"\nSelected top {len(top_species)} species (min {min_occurrences} occurrences):")
 for species, prev in top_species.items():
     print(f"  {species:35s}: {prev*100:5.1f}%")
 
 birds_raw = birds_raw[top_species.index]
 
-koodit_raw = pd.read_csv('./output/analyysi_koodit/6525b5f3/themes_51x452.csv', index_col=0)
+koodit_raw = pd.read_csv('./output/analyysi_koodit/88d43208/themes_98x452.csv', index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
 common_ids = birds_raw.index.intersection(koodit_raw.index)
@@ -80,8 +90,8 @@ predictor_binary = birds_raw.loc[common_ids].astype(int)
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
 
 prevalence = outcome_binary.mean()
-themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
-print(f"\nFiltering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
+themes_to_keep = prevalence[(prevalence >= MIN_THEME_PREVALENCE) & (prevalence <= MAX_THEME_PREVALENCE)].index
+print(f"\nFiltering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} ({MIN_THEME_PREVALENCE*100:.0f}%-{MAX_THEME_PREVALENCE*100:.0f}% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
 
 print_data_summary(predictor_binary, outcome_binary, "Bird species", "Themes")
@@ -237,6 +247,13 @@ if len(sig_assocs) > 0:
 # %% ═════════ 9. Save ═════════
 
 # %%
+# Save summary image for PDF
+save_summary_table_image(
+    results_df,
+    title="Bird Species × Themes: Statistical Summary",
+    output_path=f'{output_dir}/99_summary.png'
+)
+
 output_file = f'{output_dir}/chi_square_results.csv'
 results_df.to_csv(output_file, index=False)
 

@@ -50,35 +50,75 @@ def load_ioc_taxonomy():
 
 
 def classify_species(scientific_name, taxonomy):
-    """Classify a species into a functional group based on Order."""
+    """Classify a species into a functional group based on Order and Family."""
     if scientific_name not in taxonomy:
         return 'Muut'
     
     order = taxonomy[scientific_name]['order']
+    family = taxonomy[scientific_name]['family']
     
-    # Waterfowl
-    if order in ['ANSERIFORMES', 'GAVIIFORMES', 'PODICIPEDIFORMES']:
+    # --- NON-PASSERINES ---
+    
+    # Waterfowl (Ducks, Geese, Loons, Grebes, Cranes)
+    if order in ['ANSERIFORMES', 'GAVIIFORMES', 'PODICIPEDIFORMES', 'GRUIFORMES', 'PELECANIFORMES', 'SULIFORMES']:
         return 'Vesilinnut'
     
-    # Waders/Shorebirds
+    # Waders/Shorebirds (Gulls, Terns, Sandpipers)
     if order == 'CHARADRIIFORMES':
         return 'Kahlaajat'
     
-    # Raptors
+    # Raptors (Hawks, Falcons, Owls)
     if order in ['ACCIPITRIFORMES', 'FALCONIFORMES', 'STRIGIFORMES']:
         return 'Petolinnut'
     
-    # Songbirds (all Passerines)
-    if order == 'PASSERIFORMES':
-        return 'Varpuslinnut'
-    
-    # Gamebirds
+    # Gamebirds (Grouse, Pheasants)
     if order == 'GALLIFORMES':
         return 'Kanalinnut'
     
-    # Woodpeckers
-    if order == 'PICIFORMES':
+    # Woodpeckers & Cuckoos
+    if order in ['PICIFORMES', 'CUCULIFORMES']:
         return 'Tikkalinnut'
+        
+    # Swifts & Pigeons (Distinctive non-passerines)
+    if order in ['APODIFORMES', 'COLUMBIFORMES']:
+        return 'Kiitäjät ja kyyhkyt'
+    
+    # --- PASSERINES (Songbirds) - Split by Family ---
+    if order == 'PASSERIFORMES':
+        # Corvids (Crows, Jays, Magpies)
+        if 'Corvidae' in family:
+            return 'Varikset'
+            
+        # Tits (Paridae)
+        if 'Paridae' in family:
+            return 'Tiaiset'
+            
+        # Thrushes (Turdidae)
+        if 'Turdidae' in family:
+            return 'Rastaat'
+            
+        # Finches (Fringillidae)
+        if 'Fringillidae' in family:
+            return 'Peipot'
+            
+        # Warblers (Sylviidae, Phylloscopidae, Acrocephalidae, etc.)
+        if any(f in family for f in ['Sylviidae', 'Phylloscopidae', 'Acrocephalidae', 'Locustellidae']):
+            return 'Kertut'
+            
+        # Flycatchers & Chats (Muscicapidae - includes Robin/Punarinta, Pied Flycatcher/Kirjosieppo)
+        if 'Muscicapidae' in family:
+            return 'Siepot'
+            
+        # Sparrows & Buntings
+        if any(f in family for f in ['Passeridae', 'Emberizidae']):
+            return 'Varpuset'
+            
+        # Swallows, Wagtails, Larks (Open country/Aerial)
+        if any(f in family for f in ['Hirundinidae', 'Motacillidae', 'Alaudidae']):
+            return 'Muut varpuslinnut'
+            
+        # Other Passerines (Treecreepers, Goldcrests, etc.)
+        return 'Muut varpuslinnut'
     
     # Everything else
     return 'Muut'
@@ -182,8 +222,8 @@ def main():
     print()
     
     # Step 4: Extract bird observations
-    print("Step 4: Extracting bird observations (>=50% confidence)...")
-    bird_observations = extract_bird_observations(target_rec_ids_set, threshold=0.5)
+    print("Step 4: Extracting bird observations (>=90% confidence)...")
+    bird_observations = extract_bird_observations(target_rec_ids_set, threshold=0.9)
     print(f"✓ Found observations for {len(bird_observations)} recordings")
     print()
     
@@ -202,6 +242,13 @@ def main():
     group_counts = defaultdict(int)
     unmatched = []
     
+    # Define group order for display
+    display_groups = [
+        'Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Kanalinnut', 'Tikkalinnut', 
+        'Kiitäjät ja kyyhkyt', 'Varikset', 'Tiaiset', 'Rastaat', 'Peipot', 
+        'Kertut', 'Siepot', 'Varpuset', 'Muut varpuslinnut', 'Muut'
+    ]
+    
     for species in all_species:
         group = classify_species(species, taxonomy)
         species_groups[species] = group
@@ -211,10 +258,9 @@ def main():
     
     print()
     print("Species per group:")
-    for group in ['Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Varpuslinnut', 
-                   'Kanalinnut', 'Tikkalinnut', 'Muut']:
+    for group in display_groups:
         count = group_counts.get(group, 0)
-        print(f"  {group:15s}: {count:3} species")
+        print(f"  {group:20s}: {count:3} species")
     
     if unmatched:
         print(f"\n⚠️  Warning: {len(unmatched)} species not in IOC masterlist")
@@ -234,17 +280,24 @@ def main():
     print("Step 5: Creating grouped presence/absence matrices (2 versions)...")
     print()
     
-    # Define group names (7 functional bird groups)
-    group_names_finnish = ['Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Varpuslinnut',
-                           'Kanalinnut', 'Tikkalinnut', 'Muut']
+    # Define group names (Functional bird groups)
+    group_names_finnish = display_groups
     
     group_names_english = {
         'Vesilinnut': 'waterfowl',
         'Kahlaajat': 'waders',
         'Petolinnut': 'raptors',
-        'Varpuslinnut': 'songbirds',
         'Kanalinnut': 'gamebirds',
         'Tikkalinnut': 'woodpeckers',
+        'Kiitäjät ja kyyhkyt': 'swifts_pigeons',
+        'Varikset': 'corvids',
+        'Tiaiset': 'tits',
+        'Rastaat': 'thrushes',
+        'Peipot': 'finches',
+        'Kertut': 'warblers',
+        'Siepot': 'flycatchers',
+        'Varpuset': 'sparrows',
+        'Muut varpuslinnut': 'other_passerines',
         'Muut': 'other'
     }
     
@@ -318,7 +371,7 @@ def main():
     print(f"  - {output_latin.name}")
     print(f"  - {output_finnish.name}")
     print()
-    print(f"Dimensions: {len(data_rows)} recordings × 7 bird groups")
+    print(f"Dimensions: {len(data_rows)} recordings × {len(group_names_finnish)} bird groups")
     print()
     
     # Count recordings with each group
@@ -327,7 +380,7 @@ def main():
         group_en = group_names_english[group_fi]
         count = sum(1 for row in data_rows if group_fi in row['groups'])
         pct = count / len(data_rows) * 100 if data_rows else 0
-        print(f"  {group_fi:15s} ({group_en:10s}): {count:3d} ({pct:5.1f}%)")
+        print(f"  {group_fi:20s} ({group_en:15s}): {count:3d} ({pct:5.1f}%)")
     
     print()
 

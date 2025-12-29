@@ -28,13 +28,12 @@ warnings.filterwarnings('ignore')
 
 from utils_stats import (
     run_chi_square_tests,
-    plot_effect_size_heatmap,
     plot_top_associations_barplot,
     print_summary_stats,
     print_data_summary,
     plot_binary_predictor_distribution,
-    plot_binary_predictor_effects,
-    plot_binary_predictor_prevalence
+    plot_binary_predictor_prevalence,
+    save_summary_table_image
 )
 
 sns.set_style("whitegrid")
@@ -49,25 +48,25 @@ STANDARD_FIGSIZE = (12, 9)
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
+# Theme prevalence filtering (avoid extreme distributions)
+MIN_THEME_PREVALENCE = 0.20  # 20%
+MAX_THEME_PREVALENCE = 0.80  # 80%
+
 output_dir = './output/bird_presence_koodit'
 os.makedirs(output_dir, exist_ok=True)
 
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-# Load bird groups and derive "Any Bird" presence from them
-birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv', index_col='rec_id')
+# Load "any bird" presence (50% confidence threshold)
+birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_presence_any.csv', index_col='rec_id')
 
-# Define the 7 bird group columns
-bird_group_cols = ['Vesilinnut', 'Kahlaajat', 'Petolinnut', 'Varpuslinnut', 
-                   'Kanalinnut', 'Tikkalinnut', 'Muut']
-
-# Derive "Any Bird" presence: 1 if any group has birds, 0 otherwise
+# Extract the single binary predictor
 predictor_binary = pd.DataFrame()
-predictor_binary['Any_bird'] = (birds_raw[bird_group_cols].sum(axis=1) > 0).astype(int)
+predictor_binary['Bird present'] = birds_raw['any_bird'].astype(int)
 
 # Load outcomes from new themes file
-koodit_raw = pd.read_csv('./output/analyysi_koodit/6525b5f3/themes_51x452.csv', index_col=0)
+koodit_raw = pd.read_csv('./output/analyysi_koodit/88d43208/themes_98x452.csv', index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
 # Align by rec_id
@@ -76,8 +75,8 @@ predictor_binary = predictor_binary.loc[common_ids]
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
 
 prevalence = outcome_binary.mean()
-themes_to_keep = prevalence[(prevalence >= 0.10) & (prevalence <= 0.90)].index
-print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (10%-90% prevalence)")
+themes_to_keep = prevalence[(prevalence >= MIN_THEME_PREVALENCE) & (prevalence <= MAX_THEME_PREVALENCE)].index
+print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} ({MIN_THEME_PREVALENCE*100:.0f}%-{MAX_THEME_PREVALENCE*100:.0f}% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
 
 print_data_summary(predictor_binary, outcome_binary, "Bird presence", "Themes")
@@ -85,7 +84,7 @@ print_data_summary(predictor_binary, outcome_binary, "Bird presence", "Themes")
 # %% ═════════ 2. Predictor Distribution ═════════
 
 # %%
-n_with_bird = predictor_binary['Any_bird'].sum()
+n_with_bird = predictor_binary['Bird present'].sum()
 n_without_bird = len(predictor_binary) - n_with_bird
 
 print("=" * 70)
@@ -96,7 +95,7 @@ print(f"Interviews without birds: {n_without_bird:3d} ({n_without_bird/len(predi
 
 # Visualize distribution
 plot_binary_predictor_distribution(
-    predictor_binary, 'Any_bird', 
+    predictor_binary, 'Bird present', 
     'No bird', 'Bird present',
     'Bird presence in interviews',
     f'{output_dir}/01_bird_presence_distribution.png',
@@ -108,27 +107,29 @@ plot_binary_predictor_distribution(
 
 # %%
 print("\n" + "=" * 70)
-print("CHI-NELIÖTESTIT")
+print("CHI-SQUARE TESTS")
 print("=" * 70)
 
 results_df = run_chi_square_tests(predictor_binary, outcome_binary)
 
-print(f"\nTulokset:")
-print(f"  Merkitseviä (p < 0.05, korjaamaton): {(results_df['p_value'] < 0.05).sum()}")
-print(f"  Merkitseviä (FDR q < 0.05):          {results_df['Significant'].sum()}")
-print(f"  Keskisuuri+ efektikoko (V > 0.20):   {(results_df['Cramers_V'] > 0.2).sum()}")
+print(f"\nResults:")
+print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value'] < 0.05).sum()}")
+print(f"  Significant (FDR q < 0.05):          {results_df['Significant'].sum()}")
+print(f"  Medium+ effect size (V > 0.20):      {(results_df['Cramers_V'] > 0.2).sum()}")
 
-print(f"\n20 vahvinta yhteyttä:")
+print(f"\nTop 20 associations:")
 print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Difference']].head(20).to_string(index=False))
 
 # %% ═════════ 4. Effect Size Visualization ═════════
 
 # %%
-# Since we only have one predictor, create a custom bar plot instead of heatmap
-plot_binary_predictor_effects(
+# Bar plot showing all associations with V >= 0.1
+# Note: For binary predictor, labels include "Any_bird" explicitly
+plot_top_associations_barplot(
     results_df,
-    'Effect of bird presence on themes (significant)',
-    f'{output_dir}/02_effect_sizes.png',
+    title='Effect of bird presence on themes (V ≥ 0.1)',
+    output_path=f'{output_dir}/02_top_associations.png',
+    min_effect=0.1,
     figsize=STANDARD_FIGSIZE
 )
 
@@ -139,7 +140,7 @@ plot_binary_predictor_effects(
 significant = results_df[results_df['Significant']].copy()
 
 print("\n" + "=" * 70)
-print(f"YKSITYISKOHDAT: {len(significant)} MERKITSEVÄÄ YHTEYTTÄ (FDR q < 0.05)")
+print(f"DETAILS: {len(significant)} SIGNIFICANT ASSOCIATIONS (FDR q < 0.05)")
 print("=" * 70)
 
 if len(significant) > 0:
@@ -157,7 +158,7 @@ if len(significant) > 0:
         else:
             print(f"   → Theme more common when no bird")
 else:
-    print("Ei merkitseviä yhteyksiä.")
+    print("No significant associations found.")
 
 # %% ═════════ 6. Comparison Plot ═════════
 
@@ -197,6 +198,13 @@ if len(sig_assocs) > 0:
 # %% ═════════ 8. Save ═════════
 
 # %%
+# Save summary image for PDF
+save_summary_table_image(
+    results_df,
+    title="Bird Presence × Themes: Statistical Summary",
+    output_path=f'{output_dir}/99_summary.png'
+)
+
 output_file = f'{output_dir}/chi_square_results.csv'
 results_df.to_csv(output_file, index=False)
 
