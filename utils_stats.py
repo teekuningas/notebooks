@@ -182,7 +182,7 @@ def print_summary_stats(results_df):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def plot_cooccurrence_heatmap(cooccurrence_matrix, title, xlabel, ylabel, 
-                               output_path, figsize=(12, 9)):
+                               output_path, figsize=(12, 9), footnote=None):
     """
     Plot co-occurrence heatmap with absolute counts.
     
@@ -192,6 +192,7 @@ def plot_cooccurrence_heatmap(cooccurrence_matrix, title, xlabel, ylabel,
         xlabel, ylabel: Axis labels
         output_path: Where to save figure
         figsize: Figure dimensions
+        footnote: Optional footnote text
     """
     fig, ax = plt.subplots(figsize=figsize)
     hm = sns.heatmap(cooccurrence_matrix, annot=True, fmt='d', cmap='YlGn',
@@ -209,6 +210,9 @@ def plot_cooccurrence_heatmap(cooccurrence_matrix, title, xlabel, ylabel,
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
     ax.set_yticklabels(ax.get_yticklabels(), rotation=0, ha='right')
     
+    if footnote:
+        fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
+    
     plt.subplots_adjust(left=0.25, right=0.95, top=0.9, bottom=0.35)
     plt.savefig(output_path, dpi=300)
     plt.show()
@@ -216,7 +220,7 @@ def plot_cooccurrence_heatmap(cooccurrence_matrix, title, xlabel, ylabel,
 
 
 def plot_cooccurrence_percentage_heatmap(cooccurrence_matrix, title, xlabel, ylabel,
-                                          output_path, figsize=(12, 9)):
+                                          output_path, figsize=(12, 9), footnote=None):
     """
     Plot co-occurrence heatmap with conditional percentages.
     Shows: P(column | row) = percentage of interviews with row feature that also have column feature.
@@ -227,6 +231,7 @@ def plot_cooccurrence_percentage_heatmap(cooccurrence_matrix, title, xlabel, yla
         xlabel, ylabel: Axis labels
         output_path: Where to save figure
         figsize: Figure dimensions
+        footnote: Optional footnote text
     """
     # Convert to conditional probabilities
     cooccurrence_pct = cooccurrence_matrix.div(cooccurrence_matrix.values.diagonal(), axis=0) * 100
@@ -247,6 +252,9 @@ def plot_cooccurrence_percentage_heatmap(cooccurrence_matrix, title, xlabel, yla
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
     ax.set_yticklabels(ax.get_yticklabels(), rotation=0, ha='right')
     
+    if footnote:
+        fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
+    
     plt.subplots_adjust(left=0.25, right=0.95, top=0.9, bottom=0.35)
     plt.savefig(output_path, dpi=300)
     plt.show()
@@ -254,7 +262,7 @@ def plot_cooccurrence_percentage_heatmap(cooccurrence_matrix, title, xlabel, yla
 
 
 def plot_effect_size_heatmap(results_df, title, xlabel, ylabel, 
-                              output_path, figsize=(12, 9), vmax=0.4):
+                              output_path, figsize=(12, 9), vmax=0.4, footnote=None):
     """
     Plot heatmap of effect sizes with significance annotations.
     
@@ -265,6 +273,7 @@ def plot_effect_size_heatmap(results_df, title, xlabel, ylabel,
         output_path: Where to save figure
         figsize: Figure dimensions
         vmax: Maximum value for color scale
+        footnote: Optional footnote text
     """
     # Pivot to matrices
     pivot_pval = results_df.pivot(index='Outcome', columns='Predictor', values='p_fdr')
@@ -329,8 +338,8 @@ def plot_effect_size_heatmap(results_df, title, xlabel, ylabel,
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
     
     # Add footnote
-    footnote = "Values are Cramér's V effect size. Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR corrected)"
-    fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
+    if footnote:
+        fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
     
     plt.subplots_adjust(left=0.25, right=0.95, top=top_frac, bottom=bottom_frac)
     plt.savefig(output_path, dpi=300)
@@ -340,7 +349,7 @@ def plot_effect_size_heatmap(results_df, title, xlabel, ylabel,
 
 def plot_binary_predictor_distribution(predictor_binary, predictor_name, 
                                        label_0, label_1, title, output_path,
-                                       figsize=(12, 9)):
+                                       figsize=(12, 9), footnote=None):
     """
     Plot distribution of a binary predictor variable.
     
@@ -351,6 +360,7 @@ def plot_binary_predictor_distribution(predictor_binary, predictor_name,
         title: Plot title
         output_path: Where to save figure
         figsize: Figure dimensions
+        footnote: Optional footnote text
     """
     fig, ax = plt.subplots(figsize=figsize)
     counts = predictor_binary[predictor_name].value_counts().sort_index()
@@ -369,6 +379,9 @@ def plot_binary_predictor_distribution(predictor_binary, predictor_name,
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     
+    if footnote:
+        fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
+    
     plt.subplots_adjust(left=0.25, right=0.85, top=0.85, bottom=0.2)
     plt.savefig(output_path, dpi=300)
     plt.show()
@@ -376,7 +389,7 @@ def plot_binary_predictor_distribution(predictor_binary, predictor_name,
 
 
 def plot_binary_predictor_effects(results_df, title, output_path,
-                                    min_effect=0.1, figsize=(12, 9)):
+                                    min_effect=0.1, figsize=(12, 9), footnote=None):
     """
     Plot effect sizes for a binary predictor (horizontal bars).
     
@@ -386,6 +399,7 @@ def plot_binary_predictor_effects(results_df, title, output_path,
         output_path: Where to save figure
         min_effect: Minimum Cramér's V to include (default: 0.1)
         figsize: Figure dimensions
+        footnote: Optional footnote text
     """
     # Filter by effect size (not just significance)
     strong_effects = results_df[results_df['Cramers_V'] >= min_effect].copy()
@@ -417,6 +431,10 @@ def plot_binary_predictor_effects(results_df, title, output_path,
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.axvline(x=min_effect, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+    
+    if footnote:
+        fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
+        
     plt.subplots_adjust(left=0.25, right=0.85, top=0.85, bottom=0.2)
     plt.savefig(output_path, dpi=300)
     plt.show()
@@ -475,7 +493,7 @@ def plot_binary_predictor_prevalence(results_df, label_pred, label_not_pred,
 
 
 def plot_top_associations_barplot(results_df, title, output_path, 
-                                    min_effect=0.1, figsize=(12, 9)):
+                                    min_effect=0.1, figsize=(12, 9), footnote=None):
     """
     Plot ranked bar plot of top associations.
     
@@ -485,6 +503,7 @@ def plot_top_associations_barplot(results_df, title, output_path,
         output_path: Where to save figure
         min_effect: Minimum Cramér's V to include
         figsize: Figure dimensions
+        footnote: Optional footnote text
     """
     # Filter for strong effects
     strong_effects = results_df[results_df['Cramers_V'] >= min_effect].copy()
@@ -597,8 +616,12 @@ def plot_top_associations_barplot(results_df, title, output_path,
     ax.grid(axis='x', alpha=0.3)
     
     # Add footnote
-    footnote = "Significance: * q<0.05, ** q<0.01, *** q<0.001 (Benjamini-Hochberg FDR correction)"
-    fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
+    if footnote:
+        fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
+    else:
+        # Default footnote if none provided
+        default_note = "Significance: * q<0.05, ** q<0.01, *** q<0.001 (Benjamini-Hochberg FDR correction)"
+        fig.text(0.99, 0.01, default_note, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
     
     # Colorbar
     # Dynamic aspect ratio to keep bar width roughly constant regardless of plot height
@@ -620,7 +643,7 @@ def plot_top_associations_barplot(results_df, title, output_path,
 def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(12, 12)):
     """
     Render a summary table of statistical results as an image.
-    Includes overall stats and a table of top associations.
+    Includes overall stats and a table of top associations (significant or suggestive).
     
     Args:
         results_df: DataFrame from run_chi_square_tests()
@@ -633,68 +656,86 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
     ax.axis('off')
     
     # 1. Header
-    ax.text(0.5, 0.98, title, ha='center', va='top', fontsize=16, fontweight='bold')
-    ax.text(0.5, 0.94, "Statistical Summary", ha='center', va='top', fontsize=14, color='gray')
+    ax.text(0.5, 0.95, title, ha='center', va='top', fontsize=18, fontweight='bold')
+    ax.text(0.5, 0.91, "Statistical Summary", ha='center', va='top', fontsize=14, color='gray')
     
     # 2. Overall Statistics
     n_total = len(results_df)
     n_sig_unc = (results_df['p_value'] < 0.05).sum()
     n_sig_fdr = results_df['Significant'].sum()
-    n_large = (results_df['Cramers_V'] > 0.5).sum()
-    n_medium = ((results_df['Cramers_V'] > 0.3) & (results_df['Cramers_V'] <= 0.5)).sum()
+    max_v = results_df['Cramers_V'].max()
     
     stats_text = (
-        f"Total tests performed: {n_total}\n"
-        f"Significant (raw p < 0.05): {n_sig_unc} ({n_sig_unc/n_total*100:.1f}%)\n"
-        f"Significant (FDR q < 0.05): {n_sig_fdr} ({n_sig_fdr/n_total*100:.1f}%)\n"
-        f"Strong associations (V > 0.5): {n_large}\n"
-        f"Medium associations (0.3 < V < 0.5): {n_medium}"
+        f"Total tests performed:        {n_total}\n"
+        f"Significant (raw p < 0.05):   {n_sig_unc} ({n_sig_unc/n_total*100:.1f}%)\n"
+        f"Significant (FDR q < 0.05):   {n_sig_fdr} ({n_sig_fdr/n_total*100:.1f}%)\n"
+        f"Strongest effect size (V):    {max_v:.3f}"
     )
     
     # Draw a box for stats
-    ax.text(0.1, 0.88, "Overview", fontsize=12, fontweight='bold')
-    ax.text(0.1, 0.86, stats_text, fontsize=11, va='top', linespacing=1.6, family='monospace')
+    ax.text(0.1, 0.85, "Overview", fontsize=14, fontweight='bold')
+    ax.text(0.1, 0.82, stats_text, fontsize=12, va='top', linespacing=1.6, family='monospace')
     
     # 3. Top Associations Table
-    ax.text(0.1, 0.68, f"Top {top_n} Significant Associations (by Effect Size)", fontsize=12, fontweight='bold')
-    
-    # Prepare data for table
-    sig_df = results_df[results_df['Significant']].sort_values('Cramers_V', ascending=False).head(top_n)
+    # Determine if we show significant or just top suggestive
+    sig_df = results_df[results_df['Significant']].sort_values('Cramers_V', ascending=False)
     
     if len(sig_df) > 0:
+        table_title = f"Top {top_n} Significant Associations (by Effect Size)"
+        display_df = sig_df.head(top_n)
+        footer_note = "Showing statistically significant results (FDR q < 0.05)."
+    else:
+        table_title = f"Top {top_n} Suggestive Associations (by p-value) - NOT SIGNIFICANT"
+        display_df = results_df.sort_values('p_value', ascending=True).head(top_n)
+        footer_note = "No significant results found. Showing top associations by raw p-value for exploration."
+    
+    ax.text(0.1, 0.65, table_title, fontsize=14, fontweight='bold')
+    
+    if len(display_df) > 0:
         table_data = []
-        # Columns: Outcome, Predictor, V, q-value, Diff
-        col_labels = ['Outcome', 'Predictor', "Cramér's V", 'FDR q', 'Diff (pp)']
+        # Columns: Outcome, Predictor, Chi2, p, V, Diff
+        col_labels = ['Outcome', 'Predictor', 'Chi²', 'p-value', "V", 'Diff']
         
-        for _, row in sig_df.iterrows():
+        for _, row in display_df.iterrows():
+            # Truncate long names if needed
+            outcome = row['Outcome']
+            if len(outcome) > 40: outcome = outcome[:37] + "..."
+            
+            predictor = row['Predictor']
+            if len(predictor) > 25: predictor = predictor[:22] + "..."
+            
             table_data.append([
-                row['Outcome'],
-                row['Predictor'],
-                f"{row['Cramers_V']:.3f}",
-                f"{row['p_fdr']:.3e}",
-                f"{row['Difference']:+.1f}"
+                outcome,
+                predictor,
+                f"{row['Chi2']:.1f}",
+                f"{row['p_value']:.3f}",
+                f"{row['Cramers_V']:.2f}",
+                f"{row['Difference']:+.1f}%"
             ])
         
-        # Create table
-        table = ax.table(cellText=table_data, colLabels=col_labels, 
-                         loc='center', cellLoc='left', bbox=[0.05, 0.05, 0.9, 0.6])
+        # Create table with specific column widths to avoid cutting off text
+        # Widths sum to ~0.9 (leaving margins)
+        col_widths = [0.35, 0.20, 0.08, 0.09, 0.08, 0.10]
+        
+        table = ax.table(cellText=table_data, colLabels=col_labels, colWidths=col_widths,
+                         loc='center', cellLoc='left', bbox=[0.05, 0.05, 0.9, 0.58])
         
         table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
+        table.set_fontsize(11)
+        table.scale(1, 1.6) # Increase row height
         
         # Style headers
         for (row, col), cell in table.get_celld().items():
             if row == 0:
                 cell.set_text_props(weight='bold')
-                cell.set_facecolor('#f0f0f0')
-    else:
-        ax.text(0.5, 0.5, "No significant associations found.", ha='center', fontsize=12, style='italic')
+                cell.set_facecolor('#e6e6e6')
+                cell.set_height(0.05)
     
     # Footnote
-    ax.text(0.95, 0.02, "Generated by nb_stats analysis", ha='right', fontsize=8, color='gray')
+    ax.text(0.5, 0.02, footer_note, ha='center', fontsize=10, style='italic', color='#444444')
     
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    # IMPORTANT: Do NOT use bbox_inches='tight' to ensure exact 12-inch width matching other plots
+    plt.savefig(output_path, dpi=300)
     plt.close()
 
 

@@ -1,24 +1,31 @@
 #!/usr/bin/env python3
 """
-Create binary bird presence matrix (any bird vs no bird) at 50% confidence threshold.
+Create binary bird presence matrix (any bird vs no bird) at a configurable confidence threshold.
 
 This script:
 1. Loads target recording IDs from themes analysis
-2. Filters bird observations with prediction >= 50%
+2. Filters bird observations with prediction >= THRESHOLD
 3. Creates binary presence column: any_bird (1 if any species detected, 0 otherwise)
 
 Output: inputs/bird-metadata-refined/bird_presence_any.csv
 Columns: rec_id, lon, lat, any_bird
 
 Threshold rationale:
-- 50% confidence indicates "bird-like sound detected"
-- Used for perceptual analysis: "Was a bird present?" not "Which species?"
-- Complements species-level analysis (90% threshold)
+- Lower threshold (e.g., 10%) ensures "no bird" group is truly empty of bird sounds
+- Higher threshold (e.g., 50%) ensures "bird present" group definitely has birds
 """
 
 import csv
 from pathlib import Path
 from collections import defaultdict
+
+# CONFIGURATION
+# ---------------------------------------------------------------------------
+# Confidence threshold for "any bird" detection (0.0 - 1.0)
+# 0.1 = 10% confidence. If any species is detected with >= 10% confidence,
+# the recording is marked as having a bird.
+THRESHOLD = 0.1
+# ---------------------------------------------------------------------------
 
 
 def load_target_recordings():
@@ -96,7 +103,7 @@ def main():
     print("BIRD PRESENCE (ANY vs NONE) GENERATOR")
     print("=" * 70)
     print()
-    print("Threshold: ≥50% confidence")
+    print(f"Threshold: ≥{THRESHOLD*100:.0f}% confidence")
     print("Purpose: Perceptual analysis (was any bird detected?)")
     print()
     
@@ -114,8 +121,8 @@ def main():
     print()
     
     # Step 3: Detect bird presence
-    print("Step 3: Detecting bird presence at 50% threshold...")
-    bird_presence = detect_any_bird(target_rec_ids_set, threshold=0.5)
+    print(f"Step 3: Detecting bird presence at {THRESHOLD*100:.0f}% threshold...")
+    bird_presence = detect_any_bird(target_rec_ids_set, threshold=THRESHOLD)
     print(f"✓ Detected birds in {len(bird_presence)} recordings")
     print()
     

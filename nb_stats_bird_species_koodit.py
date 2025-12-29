@@ -45,6 +45,7 @@ plt.rcParams['font.size'] = 11
 plt.rcParams['axes.unicode_minus'] = False
 
 STANDARD_FIGSIZE = (12, 9)
+FOOTNOTE_METHOD = "Most prevalent species (min 10 occurrences) with >90% identification confidence."
 
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -116,16 +117,17 @@ plot_cooccurrence_heatmap(
     title=f'Bird species co-occurrence (n={len(predictor_binary)})',
     xlabel='Species', ylabel='Species',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=FOOTNOTE_METHOD
 )
 
-# Percentage heatmap
 plot_cooccurrence_percentage_heatmap(
     cooccurrence_matrix,
     title='Bird species co-occurrence (%)',
     xlabel='Species', ylabel='Species',
     output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=FOOTNOTE_METHOD
 )
 
 # %% ═════════ 3. Chi-Square Tests ═════════
@@ -155,7 +157,8 @@ plot_effect_size_heatmap(
     ylabel='Theme',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
-    vmax=0.4
+    vmax=0.4,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
 
 # %% ═════════ 5. Significant Associations ═════════
@@ -186,7 +189,8 @@ plot_top_associations_barplot(
     title=f'Strongest bird species-theme associations (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
 
 # %% ═════════ 7. Predictor Profiles ═════════

@@ -14,8 +14,7 @@
 # ---
 
 # %% ═════════ Statistical Analysis: Bird Groups → Themes ═════════
-#
-# Examines whether bird functional groups predict thematic codes (themes).
+# Examines whether bird functional groups predict thematic codes.
 
 # %%
 import pandas as pd
@@ -45,6 +44,7 @@ plt.rcParams['font.size'] = 11
 plt.rcParams['axes.unicode_minus'] = False
 
 STANDARD_FIGSIZE = (12, 9)
+FOOTNOTE_METHOD = "Groups based on IOC World Bird List taxonomy (Orders/Families). Species identification threshold: 90% confidence."
 
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -59,8 +59,6 @@ os.makedirs(output_dir, exist_ok=True)
 birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
-# Use all columns from the new grouped file (excluding metadata)
-# The new file has specific functional groups (e.g., Vesilinnut, Rastaat, etc.)
 bird_group_cols = birds_raw.columns.tolist()
 birds_raw = birds_raw[bird_group_cols]
 
@@ -71,14 +69,13 @@ common_ids = birds_raw.index.intersection(koodit_raw.index)
 predictor_binary = birds_raw.loc[common_ids].astype(int)
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
 
-# Filter themes by prevalence
+# Filter themes (20-80% prevalence)
 prevalence = outcome_binary.mean()
 themes_to_keep = prevalence[(prevalence >= 0.20) & (prevalence <= 0.80)].index
 print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} (20%-80% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
 
-# Filter bird groups by prevalence (remove very rare groups to avoid chi-square errors)
-# Minimum 10 occurrences required
+# Filter bird groups (min 10 occurrences)
 min_occurrences = 10
 pred_counts = predictor_binary.sum()
 groups_to_keep = pred_counts[pred_counts >= min_occurrences].index
@@ -107,16 +104,17 @@ plot_cooccurrence_heatmap(
     title=f'Bird group co-occurrence (n={len(predictor_binary)})',
     xlabel='Bird group', ylabel='Bird group',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=FOOTNOTE_METHOD
 )
 
-# Percentage heatmap
 plot_cooccurrence_percentage_heatmap(
     cooccurrence_matrix,
     title='Bird group co-occurrence (%)',
     xlabel='Bird group', ylabel='Bird group',
     output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=FOOTNOTE_METHOD
 )
 
 # %% ═════════ 3. Chi-Square Tests ═════════
@@ -146,7 +144,8 @@ plot_effect_size_heatmap(
     ylabel='Theme',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
-    vmax=0.4
+    vmax=0.4,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
 
 # %% ═════════ 5. Significant Associations ═════════
@@ -177,7 +176,8 @@ plot_top_associations_barplot(
     title=f'Strongest bird group-theme associations (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
 
 # %% ═════════ 7. Predictor Profiles ═════════
@@ -191,7 +191,6 @@ for predictor in predictor_binary.columns:
     n_pred = predictor_binary[predictor].sum()
     
     if n_pred < 10:
-        print(f"\n{predictor}: Skipped (only {n_pred} interviews)")
         continue
     
     pred_assocs = results_df[results_df['Predictor'] == predictor].copy()
@@ -238,7 +237,6 @@ if len(sig_assocs) > 0:
 # %% ═════════ 9. Save ═════════
 
 # %%
-# Save summary image for PDF
 save_summary_table_image(
     results_df,
     title="Bird Groups × Themes: Statistical Summary",

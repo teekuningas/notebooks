@@ -33,6 +33,16 @@ from pathlib import Path
 from collections import defaultdict
 
 
+# Taxonomic synonyms (Old Name -> New IOC Name)
+# Handles recent splits and genus changes (e.g., Sylvia -> Curruca, Corvus -> Coloeus)
+SYNONYMS = {
+    'Accipiter gentilis': 'Astur gentilis',   # Northern Goshawk
+    'Corvus monedula': 'Coloeus monedula',    # Western Jackdaw
+    'Sylvia communis': 'Curruca communis',    # Greater Whitethroat
+    'Sylvia curruca': 'Curruca curruca',      # Lesser Whitethroat
+}
+
+
 def load_ioc_taxonomy():
     """Load IOC World Bird List and create lookup by scientific name."""
     taxonomy = {}
@@ -51,6 +61,10 @@ def load_ioc_taxonomy():
 
 def classify_species(scientific_name, taxonomy):
     """Classify a species into a functional group based on Order and Family."""
+    # Handle synonyms/renaming
+    if scientific_name in SYNONYMS:
+        scientific_name = SYNONYMS[scientific_name]
+
     if scientific_name not in taxonomy:
         return 'Muut'
     
@@ -253,7 +267,12 @@ def main():
         group = classify_species(species, taxonomy)
         species_groups[species] = group
         group_counts[group] += 1
-        if species not in taxonomy:
+        
+        # Check if species is unknown (even after synonym check)
+        # Note: classify_species handles the synonym mapping internally for classification,
+        # but we need to check the mapped name against taxonomy for the warning
+        mapped_name = SYNONYMS.get(species, species)
+        if mapped_name not in taxonomy:
             unmatched.append(species)
     
     print()

@@ -14,8 +14,7 @@
 # ---
 
 # %% ═════════ Statistical Analysis: Bird Presence → Koodit ═════════
-#
-# Examines whether bird presence (any bird vs no birds) predicts thematic codes (koodit).
+# Examines whether bird presence (any bird vs no birds) predicts thematic codes.
 
 # %%
 import pandas as pd
@@ -32,7 +31,6 @@ from utils_stats import (
     print_summary_stats,
     print_data_summary,
     plot_binary_predictor_distribution,
-    plot_binary_predictor_prevalence,
     save_summary_table_image
 )
 
@@ -43,14 +41,14 @@ plt.rcParams['font.size'] = 11
 plt.rcParams['axes.unicode_minus'] = False
 
 STANDARD_FIGSIZE = (12, 9)
+FOOTNOTE_METHOD = "Bird presence defined as >10% confidence for any species in the recording."
 
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-# Theme prevalence filtering (avoid extreme distributions)
-MIN_THEME_PREVALENCE = 0.20  # 20%
-MAX_THEME_PREVALENCE = 0.80  # 80%
+MIN_THEME_PREVALENCE = 0.20
+MAX_THEME_PREVALENCE = 0.80
 
 output_dir = './output/bird_presence_koodit'
 os.makedirs(output_dir, exist_ok=True)
@@ -58,18 +56,14 @@ os.makedirs(output_dir, exist_ok=True)
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-# Load "any bird" presence (50% confidence threshold)
 birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_presence_any.csv', index_col='rec_id')
 
-# Extract the single binary predictor
 predictor_binary = pd.DataFrame()
 predictor_binary['Bird present'] = birds_raw['any_bird'].astype(int)
 
-# Load outcomes from new themes file
 koodit_raw = pd.read_csv('./output/analyysi_koodit/88d43208/themes_98x452.csv', index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
-# Align by rec_id
 common_ids = predictor_binary.index.intersection(koodit_raw.index)
 predictor_binary = predictor_binary.loc[common_ids]
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
@@ -93,15 +87,14 @@ print("=" * 70)
 print(f"Interviews with birds:    {n_with_bird:3d} ({n_with_bird/len(predictor_binary)*100:.1f}%)")
 print(f"Interviews without birds: {n_without_bird:3d} ({n_without_bird/len(predictor_binary)*100:.1f}%)")
 
-# Visualize distribution
 plot_binary_predictor_distribution(
     predictor_binary, 'Bird present', 
     'No bird', 'Bird present',
-    'Bird presence in interviews',
+    'Bird presence in recordings',
     f'{output_dir}/01_bird_presence_distribution.png',
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=FOOTNOTE_METHOD
 )
-
 
 # %% ═════════ 3. Chi-Square Tests ═════════
 
@@ -123,16 +116,14 @@ print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Differe
 # %% ═════════ 4. Effect Size Visualization ═════════
 
 # %%
-# Bar plot showing all associations with V >= 0.1
-# Note: For binary predictor, labels include "Any_bird" explicitly
 plot_top_associations_barplot(
     results_df,
     title='Effect of bird presence on themes (V ≥ 0.1)',
     output_path=f'{output_dir}/02_top_associations.png',
     min_effect=0.1,
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
-
 
 # %% ═════════ 5. Significant Associations ═════════
 
@@ -152,7 +143,6 @@ if len(significant) > 0:
         print(f"   When no bird:      {row['P(Outcome|~Pred)']:.1f}%")
         print(f"   → Difference: {row['Difference']:+.1f} percentage points")
         
-        # Interpret direction
         if row['Difference'] > 0:
             print(f"   → Theme more common when bird present")
         else:
@@ -160,26 +150,11 @@ if len(significant) > 0:
 else:
     print("No significant associations found.")
 
-# %% ═════════ 6. Comparison Plot ═════════
-
-# %%
-# Show prevalence of outcomes with/without birds for significant associations
-plot_binary_predictor_prevalence(
-    results_df,
-    'Bird present', 'No bird',
-    'Theme prevalence by bird presence (top 15)',
-    f'{output_dir}/03_prevalence_comparison.png',
-    top_n=15,
-    figsize=STANDARD_FIGSIZE
-)
-
-
-# %% ═════════ 7. Summary ═════════
+# %% ═════════ 6. Summary ═════════
 
 # %%
 print_summary_stats(results_df)
 
-# Categorize by effect direction
 sig_assocs = results_df[results_df['Significant']]
 if len(sig_assocs) > 0:
     enriched = sig_assocs[sig_assocs['Difference'] > 0].sort_values('Cramers_V', ascending=False)
@@ -195,10 +170,9 @@ if len(sig_assocs) > 0:
         print(f"  {row['Outcome']:30s}  {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
               f"(V={row['Cramers_V']:.3f}, q={row['p_fdr']:.3f})")
 
-# %% ═════════ 8. Save ═════════
+# %% ═════════ 7. Save ═════════
 
 # %%
-# Save summary image for PDF
 save_summary_table_image(
     results_df,
     title="Bird Presence × Themes: Statistical Summary",

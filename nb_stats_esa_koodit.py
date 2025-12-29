@@ -14,8 +14,7 @@
 # ---
 
 # %% ═════════ Statistical Analysis: ESA Habitats → Themes ═════════
-#
-# Examines whether ESA WorldCover habitat types predict consolidated thematic codes from interviews.
+# Examines whether ESA WorldCover habitat types predict consolidated thematic codes.
 
 # %%
 import pandas as pd
@@ -45,17 +44,15 @@ plt.rcParams['font.size'] = 11
 plt.rcParams['axes.unicode_minus'] = False
 
 STANDARD_FIGSIZE = (12, 9)
+FOOTNOTE_METHOD = "Data: ESA WorldCover 2020 10m. Method: Presence in 9-point grid (100m radius)."
 
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
-# Input: consolidated themes from analyysi_koodit
 THEMES_FILE = './output/analyysi_koodit/88d43208/themes_98x452.csv'
-
-# Theme prevalence filtering (avoid extreme distributions)
-MIN_THEME_PREVALENCE = 0.20  # 20%
-MAX_THEME_PREVALENCE = 0.80  # 80%
+MIN_THEME_PREVALENCE = 0.20
+MAX_THEME_PREVALENCE = 0.80
 
 output_dir = './output/esa_koodit'
 os.makedirs(output_dir, exist_ok=True)
@@ -78,8 +75,7 @@ themes_to_keep = prevalence[(prevalence >= MIN_THEME_PREVALENCE) & (prevalence <
 print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} ({MIN_THEME_PREVALENCE*100:.0f}%-{MAX_THEME_PREVALENCE*100:.0f}% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
 
-# Filter habitats by prevalence (remove very rare habitats)
-# Minimum 10 occurrences required
+# Filter habitats (min 10 occurrences)
 min_occurrences = 10
 pred_counts = predictor_binary.sum()
 habitats_to_keep = pred_counts[pred_counts >= min_occurrences].index
@@ -108,7 +104,8 @@ plot_cooccurrence_heatmap(
     title=f'Habitat co-occurrence (n={len(predictor_binary)})',
     xlabel='Habitat', ylabel='Habitat',
     output_path=f'{output_dir}/01_predictor_overlap_counts.png',
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=FOOTNOTE_METHOD
 )
 
 plot_cooccurrence_percentage_heatmap(
@@ -116,7 +113,8 @@ plot_cooccurrence_percentage_heatmap(
     title='Habitat co-occurrence (%)',
     xlabel='Habitat', ylabel='Habitat',
     output_path=f'{output_dir}/02_predictor_overlap_percentage.png',
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=FOOTNOTE_METHOD
 )
 
 # %% ═════════ 3. Chi-Square Tests ═════════
@@ -146,7 +144,8 @@ plot_effect_size_heatmap(
     ylabel='Theme',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
-    vmax=0.4
+    vmax=0.4,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
 
 # %% ═════════ 5. Significant Associations ═════════
@@ -177,7 +176,8 @@ plot_top_associations_barplot(
     title=f'Strongest habitat-theme associations (V ≥ 0.1)',
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
-    figsize=STANDARD_FIGSIZE
+    figsize=STANDARD_FIGSIZE,
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
 )
 
 # %% ═════════ 7. Predictor Profiles ═════════
@@ -191,7 +191,6 @@ for predictor in predictor_binary.columns:
     n_pred = predictor_binary[predictor].sum()
     
     if n_pred < 10:
-        print(f"\n{predictor}: Skipped (only {n_pred} interviews)")
         continue
     
     pred_assocs = results_df[results_df['Predictor'] == predictor].copy()
@@ -214,31 +213,15 @@ for predictor in predictor_binary.columns:
         for _, row in depleted.iterrows():
             print(f"    • {row['Outcome']:30s} {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
                   f"({row['Enrichment']:.2f}×, q={row['p_fdr']:.3f})")
-    
-    if len(enriched) == 0 and len(depleted) == 0:
-        print("  No significant enrichments or depletions")
 
 # %% ═════════ 8. Summary ═════════
 
 # %%
 print_summary_stats(results_df)
 
-sig_assocs = results_df[results_df['Significant']]
-if len(sig_assocs) > 0:
-    print(f"\nThemes most often associated with habitats:")
-    outcome_counts = sig_assocs['Outcome'].value_counts().head(10)
-    for outcome, count in outcome_counts.items():
-        print(f"  {outcome:35s} {count} habitat(s)")
-    
-    print(f"\nHabitats most often associated with themes:")
-    pred_counts = sig_assocs['Predictor'].value_counts().head(5)
-    for pred, count in pred_counts.items():
-        print(f"  {pred:25s} {count} theme(s)")
-
 # %% ═════════ 9. Save ═════════
 
 # %%
-# Save summary image for PDF
 save_summary_table_image(
     results_df,
     title="ESA Habitats × Themes: Statistical Summary",

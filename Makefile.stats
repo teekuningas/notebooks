@@ -1,13 +1,13 @@
 # Statistical analysis targets for notebooks
 
 run-esa-koodit:
-	python3 nb_stats_esa_koodit.py
+	MPLBACKEND=Agg python3 nb_stats_esa_koodit.py
 run-bird-groups-koodit:
-	python3 nb_stats_bird_groups_koodit.py
+	MPLBACKEND=Agg python3 nb_stats_bird_groups_koodit.py
 run-bird-presence-koodit:
-	python3 nb_stats_bird_presence_koodit.py
+	MPLBACKEND=Agg python3 nb_stats_bird_presence_koodit.py
 run-bird-species-koodit:
-	python3 nb_stats_bird_species_koodit.py
+	MPLBACKEND=Agg python3 nb_stats_bird_species_koodit.py
 
 pdf-esa-koodit:
 	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/esa_koodit.pdf" "ESA × Themes" "output/esa_koodit" 50
