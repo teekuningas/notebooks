@@ -19,10 +19,10 @@ pdf-bird-groups-koodit:
 	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/bird_groups_themes.pdf" "Bird groups × Themes" "output/bird_groups_koodit" 50
 
 pdf-bird-presence-koodit:
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_presence_themes.pdf" "Bird presence × Themes" "output/bird_presence_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/bird_presence_themes.pdf" "Bird presence × Themes" "output/bird_presence_koodit" 50
 
 pdf-bird-species-koodit:
-	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/analyysi_bird_species_themes.pdf" "Bird species × Themes" "output/bird_species_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/bird_species_themes.pdf" "Bird species × Themes" "output/bird_species_koodit" 50
 
 pdf-methodology:
 	nix shell nixpkgs/25.05#pandoc nixpkgs/25.05#texlive.combined.scheme-small --command pandoc output/METHODOLOGY_SUMMARY.md -o output/methodology_summary.pdf
