@@ -50,15 +50,15 @@ def load_data():
     df_recs['datetime'] = pd.to_datetime(df_recs['date'] + ' ' + df_recs['time'])
     df_recs = df_recs[df_recs['date'] >= DATE_START_FEATURE].copy()
     
-    # Interview uploads (use TRANSCRIPTS as ground truth - actual interviews with content)
+    # Load interviews (only those with valid transcripts ~795)
     print("Loading interviews (valid transcripts only)...")
-    df_int_all = load_interviews_from_listing(TRANSCRIPT_FILE, interview_type='0')
-    df_int_all = df_int_all.rename(columns={'has_interview_upload': 'has_interview'})
-    print(f"Total Interviews (with valid transcripts): {len(df_int_all):,}")
+    df_interviews = load_interviews_from_listing(TRANSCRIPT_FILE, interview_type='0')
+    df_interviews = df_interviews.rename(columns={'has_interview_upload': 'has_interview'})
+    print(f"Total Interviews: {len(df_interviews):,}")
     
     # Find last interview date to filter recordings
     df_recs_temp = df_recs[['rec_id', 'date']].copy()
-    df_int_with_dates = df_int_all.merge(df_recs_temp, on='rec_id', how='inner')
+    df_int_with_dates = df_interviews.merge(df_recs_temp, on='rec_id', how='inner')
     if len(df_int_with_dates) > 0:
         last_interview_date = df_int_with_dates['date'].max()
         print(f"Last interview date: {last_interview_date}")
@@ -73,12 +73,6 @@ def load_data():
         print(f"WARNING: Removed {n_before - n_after:,} duplicate rec_ids from recordings")
     
     print(f"Recordings (post-launch, deduplicated, feature-available): {len(df_recs):,}")
-
-    # Valid transcripts (already loaded as df_int_all, but keep for compatibility)
-    print("Loading valid transcripts (same as interviews)...")
-    df_int_valid = df_int_all.copy()
-    df_int_valid = df_int_valid.rename(columns={'has_interview': 'has_valid_transcript'})
-    print(f"Total Valid Transcripts: {len(df_int_valid):,}")
 
     # Habitat data
     print("Loading habitat data...")
@@ -95,9 +89,9 @@ def load_data():
     print("Loading species data...")
     df_species = pd.read_csv(os.path.join(INPUT_DIR, 'species_ids_since_June25.csv'))
     
-    return df_recs, df_int_all, df_int_valid, df_habitat, df_species, user_profiles
+    return df_recs, df_interviews, df_habitat, df_species, user_profiles
 
-df_recs, df_int_all, df_int_valid, df_habitat, df_species, user_profiles = load_data()
+df_recs, df_interviews, df_habitat, df_species, user_profiles = load_data()
 
 # %% [markdown]
 # ## 2. Feature Engineering
@@ -118,15 +112,13 @@ print("Merging data...")
 df = df_habitat.merge(df_recs, on='rec_id', how='inner')
 print(f"Analysis Dataset Size (Sampled): {len(df)}")
 
-df = df.merge(df_int_all, on='rec_id', how='left')
-df = df.merge(df_int_valid, on='rec_id', how='left')
+df = df.merge(df_interviews, on='rec_id', how='left')
 
 # Fill NaNs for interview labels (since we merged left onto the sample)
 df['has_interview'] = df['has_interview'].fillna(0).astype(int)
-df['has_valid_transcript'] = df['has_valid_transcript'].fillna(0).astype(int)
 
-# For this analysis, we only use valid transcripts as our outcome
-df['has_interview_upload'] = df['has_interview']  # Rename for compatibility with rest of code
+# Rename for compatibility with analysis code
+df['has_interview_upload'] = df['has_interview']
 
 # 1. Temporal Features
 launch_date = pd.to_datetime(DATE_START_FEATURE)
@@ -155,15 +147,15 @@ df_full['recs_since_launch'] = df_full.groupby('user').cumcount() + 1
 
 # Interviews So Far: How many interviews has this user done BEFORE this recording?
 # We need to merge interview info onto df_full first to calculate this
-df_full_merged = df_full.merge(df_int_all, on='rec_id', how='left')
+df_full_merged = df_full.merge(df_interviews, on='rec_id', how='left')
 df_full_merged['has_interview'] = df_full_merged['has_interview'].fillna(0).astype(int)
 
 # Shift to get "previous" count (don't count current interview)
-df_full_merged['interviews_so_far'] = df_full_merged.groupby('user')['has_interview'].cumsum().shift(1).fillna(0).astype(int)
+df_full_merged['interviews_since_launch'] = df_full_merged.groupby('user')['has_interview'].cumsum().shift(1).fillna(0).astype(int)
 
 # Now merge history features back to our sampled dataset
 # We need to be careful to merge from df_full_merged which has the new cols
-history_cols = ['rec_id', 'has_species', 'recs_since_launch', 'interviews_so_far']
+history_cols = ['rec_id', 'has_species', 'recs_since_launch', 'interviews_since_launch']
 
 # Ensure no duplicates in history features (safety check)
 df_history = df_full_merged[history_cols].drop_duplicates(subset=['rec_id'])
@@ -186,12 +178,12 @@ print("Feature engineering complete.")
 # ## 3. Descriptive Statistics
 
 # %%
-def generate_descriptive_stats(df_full, df_int_all, df_int_valid):
+def generate_descriptive_stats(df_full, df_interviews):
     print("\n--- Descriptive Statistics ---")
 
     n_users = df_full['user'].nunique()
     n_recs = len(df_full)
-    n_interviews = len(df_int_all)  # Now these are the same (transcripts only)
+    n_interviews = len(df_interviews)
 
     print(f"Time Period: {df_full['date'].min()} to {df_full['date'].max()}")
     print(f"Unique Users: {n_users:,}")
@@ -200,7 +192,7 @@ def generate_descriptive_stats(df_full, df_int_all, df_int_valid):
 
     # User Participation
     # We need to merge interview info onto full dataset to count users
-    df_merged = df_full.merge(df_int_all, on='rec_id', how='left')
+    df_merged = df_full.merge(df_interviews, on='rec_id', how='left')
     df_merged['has_interview'] = df_merged['has_interview'].fillna(0)
 
     user_upload_counts = df_merged.groupby('user')['has_interview'].sum()
@@ -214,17 +206,20 @@ def generate_descriptive_stats(df_full, df_int_all, df_int_valid):
     print(interviewers.describe().to_string())
     
     # Plot Histogram
+    max_interviews = int(interviewers.max())
     plt.figure(figsize=(10, 6))
-    plt.hist(interviewers, bins=range(1, 30), align='left', rwidth=0.8, color='skyblue', edgecolor='black')
+    plt.hist(interviewers, bins=range(1, max_interviews + 2), align='left', rwidth=0.8, color='skyblue', edgecolor='black')
     plt.title('Distribution of Interviews per User')
     plt.xlabel('Number of Interviews')
     plt.ylabel('Count of Users')
+    plt.yscale('log')
     plt.grid(axis='y', alpha=0.3)
     plt.savefig(os.path.join(OUTPUT_DIR, 'dist_interviews_per_user.png'))
+    plt.close()
 
     return interviewers
 
-interviewers = generate_descriptive_stats(df_recs, df_int_all, df_int_valid)
+interviewers = generate_descriptive_stats(df_recs, df_interviews)
 
 # %% [markdown]
 # ## 4. Variable Distributions
@@ -233,6 +228,14 @@ interviewers = generate_descriptive_stats(df_recs, df_int_all, df_int_valid)
 
 # %%
 def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
+    """
+    Plot distributions of all variables used in the analysis.
+    
+    Visualization principles:
+    - X-axis: Always show raw values (never log-transformed)
+    - Y-axis: Use log scale when histogram counts span ≥3 orders of magnitude
+      This makes highly skewed distributions readable while preserving actual values on x-axis
+    """
     print("\n--- Variable Distributions ---")
     
     # Print Event-Level Variable Statistics
@@ -240,123 +243,123 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
     print(f"days_since_launch: min={df_event['days_since_launch'].min()}, max={df_event['days_since_launch'].max()}, mean={df_event['days_since_launch'].mean():.1f}")
     print(f"has_species: {(df_event['has_species']==1).sum():,} ({(df_event['has_species']==1).sum()/len(df_event)*100:.1f}%) have recognized species")
     print(f"recs_since_launch: min={df_event['recs_since_launch'].min()}, max={df_event['recs_since_launch'].max()}, median={df_event['recs_since_launch'].median():.0f}")
-    print(f"interviews_so_far: min={df_event['interviews_so_far'].min()}, max={df_event['interviews_so_far'].max()}, mean={df_event['interviews_so_far'].mean():.2f}")
+    print(f"interviews_since_launch: min={df_event['interviews_since_launch'].min()}, max={df_event['interviews_since_launch'].max()}, mean={df_event['interviews_since_launch'].mean():.2f}")
     print(f"hour: range={df_event['hour'].min()}-{df_event['hour'].max()}, median={df_event['hour'].median():.0f}h")
     
-    if 'urban' in df_event.columns:
-        print(f"urban: {df_event['urban'].sum():,} ({df_event['urban'].sum()/len(df_event)*100:.1f}%) recordings")
-    if 'forest' in df_event.columns:
-        print(f"forest: {df_event['forest'].sum():,} ({df_event['forest'].sum()/len(df_event)*100:.1f}%) recordings")
-    if 'wetland' in df_event.columns:
-        print(f"wetland: {df_event['wetland'].sum():,} ({df_event['wetland'].sum()/len(df_event)*100:.1f}%) recordings")
-    if 'water' in df_event.columns:
-        print(f"water: {df_event['water'].sum():,} ({df_event['water'].sum()/len(df_event)*100:.1f}%) recordings")
+    # Print habitat statistics - only those used in the model
+    for hab in ['forest', 'water', 'urban', 'grassland']:
+        if hab in df_event.columns:
+            print(f"{hab}: {df_event[hab].sum():,} ({df_event[hab].sum()/len(df_event)*100:.1f}%) recordings")
 
     # Event-Level Variables Plot
-    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-    fig.suptitle('Event-Level Analysis: Variable Distributions', fontsize=16)
+    fig, axes = plt.subplots(5, 2, figsize=(12, 18))
+    fig.suptitle('Event-Level Analysis: Variable Distributions', fontsize=16, y=0.995)
 
     # 1. days_since_launch
     ax = axes[0, 0]
     ax.hist(df_event['days_since_launch'], bins=50, color='skyblue', edgecolor='black')
     ax.set_xlabel('Days Since Launch')
     ax.set_ylabel('Count')
-    ax.set_title('Days Since Launch')
+    ax.set_title('Days Since Launch\n(days_since_launch)')
     ax.grid(axis='y', alpha=0.3)
 
     # 2. has_species
     ax = axes[0, 1]
     has_species_counts = df_event['has_species'].value_counts().sort_index()
-    ax.bar(has_species_counts.index, has_species_counts.values, color=['salmon', 'skyblue'], edgecolor='black')
+    ax.bar(has_species_counts.index, has_species_counts.values, color=['lightcoral', 'skyblue'], edgecolor='black')
     ax.set_xlabel('Has Species Recognized')
     ax.set_ylabel('Count')
-    ax.set_title('Species Recognition')
+    ax.set_title('Species Recognition\n(has_species)')
     ax.set_xticks([0, 1])
     ax.set_xticklabels(['No', 'Yes'])
     ax.grid(axis='y', alpha=0.3)
 
     # 3. recs_since_launch
-    ax = axes[0, 2]
-    # Limit to reasonable range for visualization
-    recs_capped = df_event['recs_since_launch'].clip(upper=100)
-    ax.hist(recs_capped, bins=50, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Recording Number (Since Launch, capped at 100)')
+    ax = axes[1, 0]
+    ax.hist(df_event['recs_since_launch'], bins=100, color='skyblue', edgecolor='black')
+    ax.set_xlabel('Recording Number (Since Launch)')
     ax.set_ylabel('Count')
-    ax.set_title('User Recording Rank')
+    ax.set_title('User Recording Rank\n(recs_since_launch, log-transformed in model)')
+    ax.set_yscale('log')  # Highly skewed distribution - log y-axis to see full range
     ax.grid(axis='y', alpha=0.3)
 
-    # 4. interviews_so_far
-    ax = axes[1, 0]
-    interviews_capped = df_event['interviews_so_far'].clip(upper=20)
-    ax.hist(interviews_capped, bins=21, color='skyblue', edgecolor='black', align='left')
-    ax.set_xlabel('Interviews So Far (capped at 20)')
+    # 4. interviews_since_launch
+    ax = axes[1, 1]
+    max_interviews = int(df_event['interviews_since_launch'].max())
+    ax.hist(df_event['interviews_since_launch'], bins=range(0, max_interviews + 2), 
+            color='skyblue', edgecolor='black', align='left')
+    ax.set_xlabel('Interviews Since Launch')
     ax.set_ylabel('Count')
-    ax.set_title('User Interview Experience')
+    ax.set_title('User Interview Experience\n(interviews_since_launch)')
+    ax.set_yscale('log')  # Extremely zero-inflated - log y-axis to see non-zero cases
     ax.grid(axis='y', alpha=0.3)
 
     # 5. hour
-    ax = axes[1, 1]
+    ax = axes[2, 0]
     ax.hist(df_event['hour'], bins=24, color='skyblue', edgecolor='black', range=(0, 24))
-    ax.set_xlabel('Hour of Day')
+    ax.set_xlabel('Hour of Day (UTC)')
     ax.set_ylabel('Count')
-    ax.set_title('Recording Time')
+    ax.set_title('Recording Time\n(hour)')
     ax.grid(axis='y', alpha=0.3)
 
-    # 6. Habitat: urban
-    ax = axes[1, 2]
-    if 'urban' in df_event.columns:
-        urban_counts = df_event['urban'].value_counts().sort_index()
-        ax.bar(urban_counts.index, urban_counts.values, color=['lightgreen', 'salmon'], edgecolor='black')
-        ax.set_xlabel('Urban Habitat')
-        ax.set_ylabel('Count')
-        ax.set_title('Urban Habitat Presence')
-        ax.set_xticks([0, 1])
-        ax.set_xticklabels(['No', 'Yes'])
-        ax.grid(axis='y', alpha=0.3)
-
-    # 7. Habitat: forest
-    ax = axes[2, 0]
+    # 6. Habitat: forest
+    ax = axes[2, 1]
     if 'forest' in df_event.columns:
         forest_counts = df_event['forest'].value_counts().sort_index()
-        ax.bar(forest_counts.index, forest_counts.values, color=['lightcoral', 'lightgreen'], edgecolor='black')
+        ax.bar(forest_counts.index, forest_counts.values, color=['lightcoral', 'skyblue'], edgecolor='black')
         ax.set_xlabel('Forest Habitat')
         ax.set_ylabel('Count')
-        ax.set_title('Forest Habitat Presence')
+        ax.set_title('Forest Habitat Presence\n(forest)')
         ax.set_xticks([0, 1])
         ax.set_xticklabels(['No', 'Yes'])
         ax.grid(axis='y', alpha=0.3)
 
-    # 8. Habitat: wetland
-    ax = axes[2, 1]
-    if 'wetland' in df_event.columns:
-        wetland_counts = df_event['wetland'].value_counts().sort_index()
-        ax.bar(wetland_counts.index, wetland_counts.values, color=['tan', 'lightblue'], edgecolor='black')
-        ax.set_xlabel('Wetland Habitat')
-        ax.set_ylabel('Count')
-        ax.set_title('Wetland Habitat Presence')
-        ax.set_xticks([0, 1])
-        ax.set_xticklabels(['No', 'Yes'])
-        ax.grid(axis='y', alpha=0.3)
-
-    # 9. Habitat: water
-    ax = axes[2, 2]
+    # 7. Habitat: water
+    ax = axes[3, 0]
     if 'water' in df_event.columns:
         water_counts = df_event['water'].value_counts().sort_index()
-        ax.bar(water_counts.index, water_counts.values, color=['wheat', 'steelblue'], edgecolor='black')
+        ax.bar(water_counts.index, water_counts.values, color=['lightcoral', 'skyblue'], edgecolor='black')
         ax.set_xlabel('Water Habitat')
         ax.set_ylabel('Count')
-        ax.set_title('Water Habitat Presence')
+        ax.set_title('Water Habitat Presence\n(water)')
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels(['No', 'Yes'])
+        ax.grid(axis='y', alpha=0.3)
+
+    # 8. Habitat: urban
+    ax = axes[3, 1]
+    if 'urban' in df_event.columns:
+        urban_counts = df_event['urban'].value_counts().sort_index()
+        ax.bar(urban_counts.index, urban_counts.values, color=['lightcoral', 'skyblue'], edgecolor='black')
+        ax.set_xlabel('Urban Habitat')
+        ax.set_ylabel('Count')
+        ax.set_title('Urban Habitat Presence\n(urban)')
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels(['No', 'Yes'])
+        ax.grid(axis='y', alpha=0.3)
+
+    # 9. Habitat: grassland
+    ax = axes[4, 0]
+    if 'grassland' in df_event.columns:
+        grassland_counts = df_event['grassland'].value_counts().sort_index()
+        ax.bar(grassland_counts.index, grassland_counts.values, color=['lightcoral', 'skyblue'], edgecolor='black')
+        ax.set_xlabel('Grassland Habitat')
+        ax.set_ylabel('Count')
+        ax.set_title('Grassland Habitat Presence\n(grassland)')
         ax.set_xticks([0, 1])
         ax.set_xticklabels(['No', 'Yes'])
         ax.grid(axis='y', alpha=0.3)
     
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, 'event_variable_distributions.png'), dpi=150)
+    # Hide the unused subplot
+    axes[4, 1].axis('off')
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.99])
+    plt.savefig(os.path.join(OUTPUT_DIR, 'event_variable_distributions.png'), dpi=150, bbox_inches='tight')
     plt.close()
 
     # User-Level Variables
     # First, prepare user-level dataset
-    df_merged = df_full.merge(df_int_all, on='rec_id', how='left')
+    df_merged = df_full.merge(df_interviews, on='rec_id', how='left')
     df_merged['has_interview'] = df_merged['has_interview'].fillna(0)
     
     df_sp_meta = df_species.merge(df_merged[['rec_id', 'user', 'datetime']], on='rec_id')
@@ -388,65 +391,59 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
     print(f"tenure_days: min={user_stats['tenure_days'].min():.0f}, max={user_stats['tenure_days'].max():.0f}, mean={user_stats['tenure_days'].mean():.1f}")
     print(f"user_urban_ratio: mean={user_stats['user_urban_ratio'].mean():.3f}, median={user_stats['user_urban_ratio'].median():.3f}")
     print(f"user_forest_ratio: mean={user_stats['user_forest_ratio'].mean():.3f}, median={user_stats['user_forest_ratio'].median():.3f}")
-    print(f"n_uploads (outcome): {(user_stats['n_uploads']==0).sum():,} ({(user_stats['n_uploads']==0).sum()/len(user_stats)*100:.1f}%) users with 0 interviews")
+    print(f"n_interviews (outcome): {(user_stats['n_uploads']==0).sum():,} ({(user_stats['n_uploads']==0).sum()/len(user_stats)*100:.1f}%) users with 0 interviews")
     
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-    fig.suptitle('User-Level Analysis: Variable Distributions', fontsize=16)
+    # User-Level Variables (5 plots, no outcome)
+    fig, axes = plt.subplots(3, 2, figsize=(12, 12))
+    fig.suptitle('User-Level Analysis: Variable Distributions', fontsize=16, y=0.995)
     
-    # 1. total_recordings (log scale)
+    # 1. total_recordings
     ax = axes[0, 0]
-    ax.hist(np.log1p(user_stats['total_recordings']), bins=50, color='skyblue', edgecolor='black')
-    ax.set_xlabel('log(Total Recordings + 1)')
+    ax.hist(user_stats['total_recordings'], bins=100, color='skyblue', edgecolor='black')
+    ax.set_xlabel('Total Recordings')
     ax.set_ylabel('Count of Users')
-    ax.set_title('User Activity Level')
+    ax.set_title('User Activity Level\n(total_recordings, log-transformed in model)')
+    ax.set_yscale('log')  # Highly skewed (median=4, max=5036) - log y-axis to see full range
     ax.grid(axis='y', alpha=0.3)
     
     # 2. n_discoveries
     ax = axes[0, 1]
-    n_disc_capped = user_stats['n_discoveries'].clip(upper=50)
-    ax.hist(n_disc_capped, bins=50, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Number of Discoveries (capped at 50)')
+    ax.hist(user_stats['n_discoveries'], bins=50, color='skyblue', edgecolor='black')
+    ax.set_xlabel('Number of Discoveries')
     ax.set_ylabel('Count of Users')
-    ax.set_title('Species Discovery Count')
+    ax.set_title('Species Discovery Count\n(n_discoveries)')
+    ax.set_yscale('log')  # Highly skewed - log y-axis to see tail
     ax.grid(axis='y', alpha=0.3)
     
     # 3. tenure_days
-    ax = axes[0, 2]
+    ax = axes[1, 0]
     ax.hist(user_stats['tenure_days'], bins=50, color='skyblue', edgecolor='black')
     ax.set_xlabel('Tenure (Days)')
     ax.set_ylabel('Count of Users')
-    ax.set_title('User Tenure')
+    ax.set_title('User Tenure\n(tenure_days)')
     ax.grid(axis='y', alpha=0.3)
     
     # 4. user_urban_ratio
-    ax = axes[1, 0]
-    ax.hist(user_stats['user_urban_ratio'], bins=50, color='salmon', edgecolor='black')
+    ax = axes[1, 1]
+    ax.hist(user_stats['user_urban_ratio'], bins=50, color='skyblue', edgecolor='black')
     ax.set_xlabel('Urban Ratio (0=Rural, 1=Urban)')
     ax.set_ylabel('Count of Users')
-    ax.set_title('User Urban Habitat Ratio')
+    ax.set_title('User Urban Habitat Ratio\n(user_urban_ratio)')
     ax.grid(axis='y', alpha=0.3)
     
     # 5. user_forest_ratio
-    ax = axes[1, 1]
-    ax.hist(user_stats['user_forest_ratio'], bins=50, color='lightgreen', edgecolor='black')
+    ax = axes[2, 0]
+    ax.hist(user_stats['user_forest_ratio'], bins=50, color='skyblue', edgecolor='black')
     ax.set_xlabel('Forest Ratio')
     ax.set_ylabel('Count of Users')
-    ax.set_title('User Forest Habitat Ratio')
+    ax.set_title('User Forest Habitat Ratio\n(user_forest_ratio)')
     ax.grid(axis='y', alpha=0.3)
     
-    # 6. n_uploads (outcome variable)
-    ax = axes[1, 2]
-    # Show distribution including zeros
-    ax.hist(user_stats['n_uploads'], bins=range(0, min(21, int(user_stats['n_uploads'].max()) + 2)), 
-            color='gold', edgecolor='black', align='left')
-    ax.set_xlabel('Number of Interviews')
-    ax.set_ylabel('Count of Users')
-    ax.set_title('Interview Count (Outcome)')
-    ax.grid(axis='y', alpha=0.3)
-    ax.set_yscale('log')
+    # Hide unused subplot
+    axes[2, 1].axis('off')
     
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, 'user_variable_distributions.png'), dpi=150)
+    plt.tight_layout(rect=[0, 0, 1, 0.99])
+    plt.savefig(os.path.join(OUTPUT_DIR, 'user_variable_distributions.png'), dpi=150, bbox_inches='tight')
     plt.close()
     
     print("Variable distribution plots saved.")
@@ -456,8 +453,7 @@ plot_variable_distributions(df, df_recs, df_species, user_profiles)
 # %% [markdown]
 # ## 5. Analysis A: Event-Level (When?)
 # 
-# We use Logistic Regression to predict `has_interview_upload`.
-# We also run a check using `has_valid_transcript` to see if factors differ for "quality" interviews.
+# We use Logistic Regression to predict `has_interview_upload` (interviews with valid transcripts).
 
 # %%
 def run_event_analysis(df, target_col, label):
@@ -466,19 +462,26 @@ def run_event_analysis(df, target_col, label):
     # Formula
     # We include urban/forest/wetland/water if they exist
     # Check for perfect separation or low variance in habitat columns
+    # Use the 4 most common habitat types to avoid numerical instability
+    # with rare habitats (based on data exploration)
+    possible_habitats = ['forest', 'water', 'urban', 'grassland']
     valid_habs = []
-    for c in ['urban', 'forest', 'wetland', 'water']:
+    for c in possible_habitats:
         if c in df.columns:
-            # Check if we have enough variance (at least 5 positives and 5 negatives)
-            if df[c].sum() > 5 and (len(df) - df[c].sum()) > 5:
+            n_positive = df[c].sum()
+            n_negative = len(df) - n_positive
+            if n_positive >= 50 and n_negative >= 50:
                 valid_habs.append(c)
+                print(f"Including habitat: {c} ({n_positive} positive, {n_negative} negative)")
     
     hab_terms = " + ".join(valid_habs)
     
-    # Updated formula with user-centric features
-    # We use log(rank) because the effect of 1st->2nd is likely bigger than 100th->101st
-    # Added 'has_species' to control for successful recognition
-    base_formula = f"{target_col} ~ days_since_launch + has_species + np.log(recs_since_launch) + interviews_so_far"
+    # Formula construction:
+    # Log transforms are used for variables with diminishing marginal effects:
+    # - np.log(recs_since_launch): Effect of 1st→2nd recording differs from 100th→101st
+    #   The novelty/learning effect diminishes with experience
+    # Other variables are used in raw form as they have linear relationships with outcome
+    base_formula = f"{target_col} ~ days_since_launch + has_species + np.log(recs_since_launch) + interviews_since_launch"
     
     if hab_terms:
         formula = f"{base_formula} + {hab_terms}"
@@ -492,10 +495,10 @@ def run_event_analysis(df, target_col, label):
     
     # Create design matrix
     # We need to drop NAs first
-    df_clean = df.dropna(subset=['days_since_launch', 'has_species', 'recs_since_launch', 'interviews_so_far'])
+    df_clean = df.dropna(subset=['days_since_launch', 'has_species', 'recs_since_launch', 'interviews_since_launch'])
     
     # Construct a temporary dataframe for VIF
-    X = df_clean[['days_since_launch', 'has_species', 'recs_since_launch', 'interviews_so_far']]
+    X = df_clean[['days_since_launch', 'has_species', 'recs_since_launch', 'interviews_since_launch']]
     X['log_recs'] = np.log(X['recs_since_launch'])
     X = X.drop(columns=['recs_since_launch'])
     X['Intercept'] = 1
@@ -507,14 +510,8 @@ def run_event_analysis(df, target_col, label):
     print("\n--- Variance Inflation Factors (VIF) ---")
     print(vif_data)
     
-    # Standard Logit
-    try:
-        model = smf.logit(formula=formula, data=df).fit(disp=0)
-    except Exception as e:
-        print(f"Logit failed: {e}. Trying with fewer variables...")
-        # Fallback: remove habitat
-        formula = base_formula
-        model = smf.logit(formula=formula, data=df).fit(disp=0)
+    # Logistic Regression
+    model = smf.logit(formula=formula, data=df).fit(disp=0)
     
     # Extract Odds Ratios
     params = model.params
@@ -529,15 +526,20 @@ def run_event_analysis(df, target_col, label):
     
     return results
 
-print("\nRunning Logit for Interviews (Valid Transcripts)...")
-res_uploads = run_event_analysis(df, 'has_interview_upload', "Interviews")
-
-# Keep res_valid for compatibility with report generation (but it's the same data)
-res_valid = res_uploads.copy()
+print("\nRunning Logit for Interviews...")
+res_interviews = run_event_analysis(df, 'has_interview_upload', "Interviews")
 
 # Create simple odds ratio plot
 def plot_odds_ratios(results):
     r = results.drop('Intercept')
+    
+    # Filter out extreme values that cause plotting issues
+    # (These indicate near-perfect separation or numerical issues)
+    r = r[(r['OR'] > 1e-6) & (r['OR'] < 1e6)]
+    
+    if len(r) == 0:
+        print("Warning: No plottable odds ratios (all extreme values)")
+        return
     
     fig, ax = plt.subplots(figsize=(10, 6))
     
@@ -554,8 +556,9 @@ def plot_odds_ratios(results):
     ax.grid(axis='x', alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, 'odds_ratios.png'))
+    plt.close()
 
-plot_odds_ratios(res_uploads)
+plot_odds_ratios(res_interviews)
 
 # %% [markdown]
 # ## 6. Analysis B: User-Level (Who?)
@@ -564,14 +567,14 @@ plot_odds_ratios(res_uploads)
 # This handles the "super-user" issue (some give 20, some 1).
 
 # %%
-def run_user_analysis(df_full, df_int_all, df_int_valid, df_species, user_profiles):
+def run_user_analysis(df_full, df_interviews, df_species, user_profiles):
     print("\n--- User Analysis: Who Interviews? ---")
     
     # We need to aggregate from the FULL dataset, not the sampled one.
     # We now have user_profiles (Urban/Forest ratios) to include!
     
     # 1. Merge Interview Counts
-    df_merged = df_full.merge(df_int_all, on='rec_id', how='left')
+    df_merged = df_full.merge(df_interviews, on='rec_id', how='left')
     df_merged['has_interview'] = df_merged['has_interview'].fillna(0)
     
     # Ensure days_since_launch is present
@@ -617,159 +620,184 @@ def run_user_analysis(df_full, df_int_all, df_int_valid, df_species, user_profil
     # We add a flag for 'is_active' to see if the behavior differs for frequent recorders.
     user_stats['is_active'] = (user_stats['total_recordings'] >= 5).astype(int)
     
-    # Handle potential zeros in log
-    user_stats['log_total_recordings'] = np.log(user_stats['total_recordings'] + 1)
-    
     print(f"Analyzing {len(user_stats)} users (All).")
     
-    # Model: Negative Binomial
-    # Formula: n_uploads ~ log_total_recordings + n_discoveries + tenure_days + user_urban_ratio + user_forest_ratio
+    # Formula construction for user-level count model with OFFSET:
+    # We use total_recordings as an offset to model INTERVIEW RATE, not raw count
+    # This controls for the mechanical correlation: more recordings → more opportunities to interview
+    # Now we're asking: "Given the same activity level, what factors increase interview propensity?"
+    # 
+    # Other variables capture user engagement and context:
+    # - n_discoveries: Species seeking behavior
+    # - tenure_days: Long-term engagement
+    # - user_urban_ratio, user_forest_ratio: Habitat context
+    formula = "n_uploads ~ n_discoveries + tenure_days + user_urban_ratio + user_forest_ratio"
     
-    formula = "n_uploads ~ log_total_recordings + n_discoveries + tenure_days + user_urban_ratio + user_forest_ratio"
+    print(f"Formula (with offset): {formula}")
+    print(f"Offset: log(total_recordings)")
     
-    print(f"Formula: {formula}")
+    # Add VIF check for multicollinearity
+    print("\n--- Checking Multicollinearity (VIF) ---")
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    X_user = user_stats[['n_discoveries', 'tenure_days', 'user_urban_ratio', 'user_forest_ratio']].copy()
+    X_user['Intercept'] = 1
+    X_user_clean = X_user.dropna()
     
-    try:
-        model = smf.glm(formula=formula, data=user_stats, 
-                        family=sm.families.NegativeBinomial()).fit()
-    except Exception as e:
-        print(f"Negative Binomial failed: {e}, falling back to Poisson")
-        try:
-            model = smf.glm(formula=formula, data=user_stats, 
-                            family=sm.families.Poisson()).fit()
-        except Exception as e2:
-            print(f"Poisson failed too: {e2}. Trying simplified model.")
-            formula_simple = "n_uploads ~ log_total_recordings + n_discoveries"
-            model = smf.glm(formula=formula_simple, data=user_stats, 
-                            family=sm.families.Poisson()).fit()
+    vif_data = pd.DataFrame()
+    vif_data["feature"] = X_user_clean.columns
+    vif_data["VIF"] = [variance_inflation_factor(X_user_clean.values, i) for i in range(len(X_user_clean.columns))]
+    print(vif_data)
+    
+    # Fit model with offset
+    model = smf.glm(formula=formula, data=user_stats, 
+                    family=sm.families.NegativeBinomial(),
+                    offset=np.log(user_stats['total_recordings'])).fit()
         
     print(model.summary())
     
-    # Visualizing 1: Discovery Effect
-    user_stats['discovery_bin'] = pd.qcut(user_stats['n_discoveries'], q=5, duplicates='drop')
+    # Create interpretation table showing effects over realistic ranges
+    params = model.params.drop('Intercept')
+    conf_int = model.conf_int().drop('Intercept')
+    pvalues = model.pvalues.drop('Intercept')
     
-    plt.figure(figsize=(10, 6))
-    sns.barplot(data=user_stats, x='discovery_bin', y='n_uploads')
-    plt.title('Average Interviews per User by "Species Discovery" Level')
-    plt.xlabel('Number of New Species Found')
-    plt.ylabel('Average Number of Interviews')
-    plt.xticks(rotation=45)
+    # Calculate interpretable effects
+    effects_table = pd.DataFrame({
+        'Variable': params.index,
+        'Coefficient': params.values,
+        'CI_lower': conf_int[0].values,
+        'CI_upper': conf_int[1].values,
+        'p-value': pvalues.values
+    })
+    
+    # Add interpretation column (effect over typical range)
+    interpretations = []
+    for var, coef in zip(params.index, params.values):
+        if var == 'n_discoveries':
+            # Effect of 50 discoveries
+            effect = np.exp(coef * 50) - 1
+            interpretations.append(f"50 discoveries → {effect*100:+.0f}% change in rate")
+        elif var == 'tenure_days':
+            # Effect of 100 days
+            effect = np.exp(coef * 100) - 1
+            interpretations.append(f"100 days tenure → {effect*100:+.0f}% change in rate")
+        elif var == 'user_urban_ratio':
+            # Effect of going from rural (0) to urban (1)
+            effect = np.exp(coef) - 1
+            interpretations.append(f"Rural→Urban → {effect*100:+.0f}% change in rate")
+        elif var == 'user_forest_ratio':
+            # Effect of going from no forest to all forest
+            effect = np.exp(coef) - 1
+            interpretations.append(f"No forest→All forest → {effect*100:+.0f}% change in rate")
+        else:
+            interpretations.append("")
+    
+    effects_table['Interpretation'] = interpretations
+    
+    print("\n--- Interpretable Effects (Interview Rate) ---")
+    print(effects_table.to_string(index=False))
+    
+    # Save table as image for report
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.axis('tight')
+    ax.axis('off')
+    
+    # Format table data
+    table_data = []
+    table_data.append(['Variable', 'Coefficient', '95% CI', 'p-value', 'Effect over typical range'])
+    for _, row in effects_table.iterrows():
+        table_data.append([
+            row['Variable'],
+            f"{row['Coefficient']:.3f}",
+            f"[{row['CI_lower']:.3f}, {row['CI_upper']:.3f}]",
+            f"{row['p-value']:.3f}" if row['p-value'] >= 0.001 else "<0.001",
+            row['Interpretation']
+        ])
+    
+    table = ax.table(cellText=table_data, cellLoc='left', loc='center',
+                    colWidths=[0.18, 0.12, 0.18, 0.10, 0.42])
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 2)
+    
+    # Style header row
+    for i in range(5):
+        table[(0, i)].set_facecolor('#4CAF50')
+        table[(0, i)].set_text_props(weight='bold', color='white')
+    
+    plt.title('User-Level Analysis: Factors Influencing Interview Rate\n(Controlling for activity level via offset)',
+              fontsize=12, pad=20)
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, 'user_discovery_vs_interviews.png'))
-    
-    # Visualizing 2: Habitat Effect (Urban vs Forest)
-    # Bin users by Urban Ratio
-    user_stats['urban_bin'] = pd.cut(user_stats['user_urban_ratio'], bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0], include_lowest=True)
-    
-    plt.figure(figsize=(10, 6))
-    sns.barplot(data=user_stats, x='urban_bin', y='n_uploads')
-    plt.title('Average Interviews per User by "Urban Ratio"')
-    plt.xlabel('User Urban Ratio (0=Rural, 1=Urban)')
-    plt.ylabel('Average Number of Interviews')
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, 'user_urban_vs_interviews.png'))
-    
-    # Visualizing 3: Adoption Curve (Event Level - but aggregated here for simplicity?)
-    # No, Adoption Curve is best done on the Event Level dataframe 'df'
+    plt.savefig(os.path.join(OUTPUT_DIR, 'user_coefficients.png'))
+    plt.close()
     
     return model.summary()
 
-user_model_summary = run_user_analysis(df_recs, df_int_all, df_int_valid, df_species, user_profiles)
-
-# %%
-def plot_adoption_curve(df):
-    print("\n--- Plotting Adoption Curve ---")
-    # Probability of interview by Recording Rank (1st, 2nd, 3rd...)
-    # We limit to first 50 recordings to avoid noise at the tail
-    
-    df_subset = df[df['recs_since_launch'] <= 50].copy()
-    
-    # Calculate probability per rank
-    adoption = df_subset.groupby('recs_since_launch')['has_interview_upload'].mean().reset_index()
-    
-    plt.figure(figsize=(12, 6))
-    sns.lineplot(data=adoption, x='recs_since_launch', y='has_interview_upload', marker='o')
-    plt.title('Interview Probability by User Recording Rank (Since Launch)')
-    plt.xlabel('Recording Number Since Launch (1st, 2nd, ...)')
-    plt.ylabel('Probability of Interview')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, 'adoption_curve.png'))
-
-plot_adoption_curve(df)
+user_model_summary = run_user_analysis(df_recs, df_interviews, df_species, user_profiles)
 
 # Generate Report
-def generate_markdown_report(df_recs, df_int_all, df_int_valid, res_uploads, res_valid, user_model_summary):
+def generate_markdown_report(df_recs, df_interviews, res_interviews, user_model_summary):
     report_path = os.path.join(OUTPUT_DIR, 'interview_analysis_report.md')
     
     with open(report_path, 'w') as f:
-        f.write("# Interview Feature Analysis\n\n")
-        f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d')}\n\n")
+        f.write("# Interview Analysis\n\n")
         
         f.write("## 1. Data\n")
         f.write(f"* **Period:** {df_recs['date'].min()} to {df_recs['date'].max()}\n")
         f.write(f"* **Recordings:** {len(df_recs):,}\n")
         f.write(f"* **Users:** {df_recs['user'].nunique():,}\n")
-        f.write(f"* **Interviews:** {len(df_int_all):,} ({len(df_int_all)/len(df_recs)*100:.2f}%)\n\n")
+        f.write(f"* **Interviews:** {len(df_interviews):,} ({len(df_interviews)/len(df_recs)*100:.2f}%)\n\n")
         
         f.write("![Distribution](dist_interviews_per_user.png)\n\n")
         
         f.write("## 2. Variables\n\n")
         
-        f.write("**Event-Level (Analysis A):**\n")
-        f.write("* `days_since_launch` - Days since feature launch (June 11, 2025)\n")
-        f.write("* `has_species` - Bird species recognized?\n")
-        f.write("* `recs_since_launch` - User's recording number (1st, 2nd, 3rd...)\n")
-        f.write("* `interviews_so_far` - Interviews completed before this recording\n")
-        f.write("* `hour` - Hour of day\n")
-        f.write("* `urban`, `forest`, `wetland`, `water` - Habitat (ESA WorldCover)\n\n")
+        f.write("**Event-Level (Analysis A):**\n\n")
+        f.write("* `days_since_launch` - Days since June 11, 2025\n\n")
+        f.write("* `has_species` - Was any bird species recognized?\n\n")
+        f.write("* `recs_since_launch` - User's recording count since launch\n\n")
+        f.write("* `interviews_since_launch` - User's prior interview count\n\n")
+        f.write("* `hour` - Hour of day (UTC)\n\n")
+        f.write("* `forest`, `water`, `urban`, `grassland` - Habitat presence (ESA WorldCover)\n\n")
         
-        f.write("**User-Level (Analysis B):**\n")
-        f.write("* `total_recordings` - Total recordings (log-transformed)\n")
-        f.write("* `n_discoveries` - Unique species discovered\n")
-        f.write("* `tenure_days` - Days between first and last recording\n")
-        f.write("* `user_urban_ratio` - Proportion in urban habitat\n")
-        f.write("* `user_forest_ratio` - Proportion in forest habitat\n\n")
+        f.write("**User-Level (Analysis B):**\n\n")
+        f.write("* `total_recordings` - User's total recording count\n\n")
+        f.write("* `n_discoveries` - Unique species discovered by user\n\n")
+        f.write("* `tenure_days` - Days between user's first and last recording\n\n")
+        f.write("* `user_urban_ratio` - Proportion of user's recordings in urban habitat\n\n")
+        f.write("* `user_forest_ratio` - Proportion of user's recordings in forest habitat\n\n")
         
-        f.write("![Event Variables](event_variable_distributions.png)\n")
+        f.write("![Event Variables](event_variable_distributions.png)\n\n")
         f.write("![User Variables](user_variable_distributions.png)\n\n")
         
-        f.write("## 3. Analysis A: When do users interview?\n\n")
-        f.write("*Milloin käyttäjä haluaa kertoa luontohavainnoistaan?*\n\n")
-        f.write("**Method:** Logistic Regression  \n")
-        f.write("**Outcome:** `has_interview_upload` (0/1)\n\n")
+        f.write("## 3. Analysis A: When?\n\n")
+        f.write("*When do users interview?*\n\n")
+        f.write("**Method:** Logistic regression\n\n")
+        f.write("**Outcome:** Interview (0/1)\n\n")
         
         f.write("**Odds Ratios** (>1 = increased probability, <1 = decreased):\n\n")
-        f.write("| Factor | Odds Ratio (All Uploads) | p-value | Odds Ratio (Valid) | p-value |\n")
-        f.write("| :--- | :--- | :--- | :--- | :--- |\n")
+        f.write("| Factor | Odds Ratio | 95% CI | p-value |\n")
+        f.write("| :--- | :---: | :---: | :---: |\n")
         
-        # Merge results for table
-        common_idx = res_uploads.index.intersection(res_valid.index)
-        for idx in common_idx:
+        # Create results table
+        for idx in res_interviews.index:
             if idx == 'Intercept': continue
-            r1 = res_uploads.loc[idx]
-            r2 = res_valid.loc[idx]
+            r = res_interviews.loc[idx]
             name = idx.replace('np.log(', '').replace(')', '')
-            f.write(f"| {name} | {r1['OR']:.2f} | {r1['p-value']:.3f} | {r2['OR']:.2f} | {r2['p-value']:.3f} |\n")
+            f.write(f"| {name} | {r['OR']:.2f} | [{r['Lower']:.2f}, {r['Upper']:.2f}] | {r['p-value']:.3f} |\n")
             
-        f.write("\n![Odds Ratios](comparison_odds_ratios.png)\n\n")
+        f.write("\n![Odds Ratios](odds_ratios.png)\n\n")
         
-        f.write("## 4. Analysis B: Who interviews?\n\n")
-        f.write("*Kuka haluaa kertoa luontohavainnoistaan?*\n\n")
-        f.write("**Method:** Negative Binomial/Poisson Regression  \n")
-        f.write("**Outcome:** `n_uploads` (count)\n\n")
+        f.write("## 4. Analysis B: Who?\n\n")
+        f.write("*Who interviews more frequently?*\n\n")
+        f.write("**Method:** Negative Binomial (offset: log recordings)\n\n")
+        f.write("**Outcome:** Interview rate\n\n")
         
         f.write("**Model:**\n")
         f.write("```\n")
         f.write(str(user_model_summary))
         f.write("\n```\n\n")
         
-        f.write("![User Discovery vs Interviews](user_discovery_vs_interviews.png)\n")
-        f.write("![User Urban Ratio vs Interviews](user_urban_vs_interviews.png)\n\n")
-        
-        f.write("## 5. Adoption Curve\n\n")
-        f.write("Interview probability by recording rank (1st, 2nd, 3rd...).\n\n")
-        f.write("![Adoption Curve](adoption_curve.png)\n")
+        f.write("![User Effects Table](user_coefficients.png)\n")
         
     print(f"Report generated: {report_path}")
 
@@ -777,7 +805,7 @@ def generate_markdown_report(df_recs, df_int_all, df_int_valid, res_uploads, res
 # ## 7. Report Generation
 
 # %%
-generate_markdown_report(df_recs, df_int_all, df_int_valid, res_uploads, res_valid, user_model_summary)
+generate_markdown_report(df_recs, df_interviews, res_interviews, user_model_summary)
 
 # %%
 print("\n--- Analysis Complete ---")

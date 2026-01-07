@@ -37,6 +37,9 @@ run-interview-analysis:
 	python3 nb_interview_comprehensive.py
 
 pdf-interview-report:
-	cd output/interview_comprehensive && nix shell nixpkgs/25.05#pandoc nixpkgs/25.05#texlive.combined.scheme-small --command pandoc interview_analysis_report.md -o interview_analysis_report.pdf
+	cd output/interview_comprehensive && nix shell nixpkgs/25.05#pandoc nixpkgs/25.05#texlive.combined.scheme-small --command pandoc interview_analysis_report.md -o interview_analysis_report.pdf \
+		-V geometry:margin=1.5cm \
+		-V fontsize=10pt \
+		--pdf-engine=pdflatex
 
 .PHONY: pdf-esa-koodit pdf-bird-groups-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit pdf-all run-esa-koodit run-bird-groups-koodit run-bird-presence-koodit run-bird-groups-koodit run-all pdf-methodology run-methodology run-interview-analysis pdf-interview-report
