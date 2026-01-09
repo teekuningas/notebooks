@@ -18,11 +18,9 @@ ESA_CLASSES = {
     100: "Moss and lichen"
 }
 
+# Only keeping 'urban' as requested
 HABITAT_MAPPING = {
-    "Tree cover": "forest", "Shrubland": "shrubland", "Grassland": "grassland",
-    "Cropland": "cropland", "Built-up": "urban", "Bare / sparse vegetation": "bare",
-    "Permanent water bodies": "water", "Herbaceous wetland": "wetland",
-    "Moss and lichen": "moss_lichen"
+    "Built-up": "urban"
 }
 
 
@@ -88,7 +86,7 @@ def get_habitat_data(df_recs, esa_dir, cache_file):
         cache_file: Path to cache CSV file
     
     Returns:
-        DataFrame with rec_id and habitat columns (urban, forest, etc.)
+        DataFrame with rec_id and habitat columns (only urban)
     """
     required_ids = set(df_recs['rec_id'])
     print(f"Targeting {len(required_ids)} recordings for habitat analysis")
@@ -102,6 +100,7 @@ def get_habitat_data(df_recs, esa_dir, cache_file):
         df_cache = df_cache.dropna(subset=['rec_id'])
         # Remove duplicate rec_ids (keep first)
         df_cache = df_cache.drop_duplicates(subset=['rec_id'], keep='first')
+        
         for _, row in df_cache.iterrows():
             cached_data[row['rec_id']] = row.to_dict()
     
@@ -110,7 +109,10 @@ def get_habitat_data(df_recs, esa_dir, cache_file):
     if not missing_ids:
         print("All required habitat data found in cache.")
         rows = [cached_data[rid] for rid in required_ids if rid in cached_data]
-        return pd.DataFrame(rows)
+        df_out = pd.DataFrame(rows)
+        # Return only rec_id and urban
+        cols_to_keep = ['rec_id', 'urban']
+        return df_out[cols_to_keep] if 'urban' in df_out.columns else df_out
     
     print(f"Computing habitat for {len(missing_ids)} missing recordings...")
     
@@ -143,14 +145,24 @@ def get_habitat_data(df_recs, esa_dir, cache_file):
     
     df_new = pd.DataFrame(new_rows)
     if os.path.exists(cache_file):
-        df_new.to_csv(cache_file, mode='a', header=False, index=False)
+        # Match schema for append
+        existing_cols = pd.read_csv(cache_file, nrows=0).columns.tolist()
+        df_to_append = pd.DataFrame(new_rows)
+        for c in existing_cols:
+            if c not in df_to_append.columns:
+                df_to_append[c] = 0
+        df_to_append = df_to_append[existing_cols]
+        df_to_append.to_csv(cache_file, mode='a', header=False, index=False)
     else:
         df_new.to_csv(cache_file, index=False)
     
     print(f"Updated cache with {len(new_rows)} new records.")
     
     final_rows = [cached_data[rid] for rid in required_ids if rid in cached_data]
-    return pd.DataFrame(final_rows)
+    df_out = pd.DataFrame(final_rows)
+    cols_to_keep = ['rec_id', 'urban']
+    cols = [c for c in cols_to_keep if c in df_out.columns]
+    return df_out[cols]
 
 
 # Interview data loading utilities
@@ -158,13 +170,6 @@ def get_habitat_data(df_recs, esa_dir, cache_file):
 def load_interviews_from_listing(listing_file, interview_type='0'):
     """
     Parse interview uploads from MinIO listing file.
-    
-    Args:
-        listing_file: Path to listing.txt file
-        interview_type: '0' for observation interviews
-    
-    Returns:
-        DataFrame with rec_id and has_interview_upload columns
     """
     interviews = []
     with open(listing_file, 'r') as f:
@@ -181,19 +186,14 @@ def load_interviews_from_listing(listing_file, interview_type='0'):
 def compute_user_habitat_profiles(df_habitat, df_recs):
     """
     Compute habitat usage ratios for each user.
-    
-    Args:
-        df_habitat: DataFrame with rec_id and habitat columns
-        df_recs: DataFrame with rec_id and user columns
-    
-    Returns:
-        DataFrame with user, user_urban_ratio, user_forest_ratio columns
+    Only computes urban ratio as requested.
     """
     df_merged = df_habitat.merge(df_recs[['rec_id', 'user']], on='rec_id')
     
     user_profiles = df_merged.groupby('user').agg({
-        'urban': 'mean',
-        'forest': 'mean'
-    }).rename(columns={'urban': 'user_urban_ratio', 'forest': 'user_forest_ratio'})
+        'urban': 'mean'
+    }).rename(columns={
+        'urban': 'user_urban_ratio'
+    })
     
     return user_profiles
