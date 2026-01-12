@@ -115,6 +115,29 @@ def filter_interview_simple(data):
                 break
     return filtered_data
 
+def filter_interview_all_valid(data):
+    """
+    Filters interview data to include ALL valid interviews for each user (>= 10 words, >= 10 unique words).
+    Unlike filter_interview_simple, this does NOT stop after the first valid interview.
+    """
+    grouped_by_user = {}
+    for metadata, content in data:
+        user_id = metadata["user_id"]
+        if user_id not in grouped_by_user:
+            grouped_by_user[user_id] = []
+        grouped_by_user[user_id].append((metadata, content))
+
+    filtered_data = []
+    for user_id, user_data in grouped_by_user.items():
+        sorted_user_data = sorted(user_data, key=lambda x: x[0]["timestamp"])
+        for metadata, content in sorted_user_data:
+            stripped_text = content.strip()
+            words = stripped_text.split()
+            if len(words) >= 10 and len(set(words)) >= 10:
+                filtered_data.append((metadata, content))
+                # No break here - we keep all valid interviews
+    return filtered_data
+
 def display_interactive_dendrogram(vectors, items, item_key):
     # Helper function to calculate within-cluster sum of squares (WCSS) for a range of thresholds
     def calculate_wcss(vectors, Z, thresholds):

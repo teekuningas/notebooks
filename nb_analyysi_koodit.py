@@ -15,7 +15,7 @@
 
 # %%
 import json
-from utils import read_interview_data, filter_interview_simple
+from utils import read_interview_data, filter_interview_all_valid
 
 # --- Configuration ---
 INPUT_FILE = "output/consolidation/77db8e4e_seed11/final_themes.json"
@@ -30,7 +30,7 @@ print(f"Loaded {len(codes)} themes from: {INPUT_FILE}")
 
 # --- Load Interview Data ---
 contents = read_interview_data("data/birdinterview", "observation")
-contents = filter_interview_simple(contents)
+contents = filter_interview_all_valid(contents)
 contents = [(meta["rec_id"], text) for meta, text in contents]
 
 print(f"Interviews: {len(contents)}")

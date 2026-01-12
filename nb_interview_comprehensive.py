@@ -373,7 +373,8 @@ plot_variable_distributions(df, df_recs, df_species, user_profiles)
 # %% [markdown]
 # ## 5. Event-Level Analysis
 # 
-# Logistic regression to predict interview participation at the recording level.
+# Mixed-effects logistic regression to predict interview participation at the recording level.
+# Uses user as a random effect to account for repeated observations from the same user.
 
 # %%
 def run_event_analysis(df, target_col, label):
@@ -402,6 +403,7 @@ def run_event_analysis(df, target_col, label):
         formula = base_formula
     
     print(f"Formula: {formula}")
+    print("Model: Logistic Regression with Cluster-Robust Standard Errors (clustered by user)")
     
     # Multicollinearity check
     from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -420,18 +422,37 @@ def run_event_analysis(df, target_col, label):
     print("\n--- Variance Inflation Factors (VIF) ---")
     print(vif_data)
     
-    # Fit logistic regression
-    model = smf.logit(formula=formula, data=df).fit(disp=0)
+    # Fit Logistic Regression with Cluster-Robust Standard Errors
+    # We use all data (no sampling) as Logit is faster than MixedLM
+    # cov_type='cluster' handles the dependency of multiple recordings per user
+    print(f"Fitting model on {len(df):,} observations...")
     
-    # Extract Odds Ratios
+    # Ensure no NaNs in grouping variable and predictors
+    # We must list raw column names (e.g. 'recs_since_launch') not formula terms (e.g. 'np.log(recs_since_launch)')
+    cols_to_check = ['user', 'days_since_launch', 'has_species', 'recs_since_launch', 'interviews_since_launch'] + valid_habs
+    df_model = df.dropna(subset=cols_to_check)
+    
+    model = smf.logit(formula=formula, data=df_model).fit(
+        cov_type='cluster',
+        cov_kwds={'groups': df_model['user']},
+        disp=0
+    )
+    
+    # Extract coefficients and confidence intervals
     params = model.params
     conf = model.conf_int()
-    conf['OR'] = np.exp(params)
-    conf['Lower'] = np.exp(conf[0])
-    conf['Upper'] = np.exp(conf[1])
+    conf['Coefficient'] = params
+    conf['Lower'] = conf[0]
+    conf['Upper'] = conf[1]
     conf['p-value'] = model.pvalues
     
-    results = conf[['OR', 'Lower', 'Upper', 'p-value']]
+    # Calculate Odds Ratios
+    conf['OR'] = np.exp(params)
+    conf['OR_Lower'] = np.exp(conf[0])
+    conf['OR_Upper'] = np.exp(conf[1])
+    
+    results = conf[['Coefficient', 'Lower', 'Upper', 'OR', 'OR_Lower', 'OR_Upper', 'p-value']]
+    print("\n--- Results (Robust SEs) ---")
     print(results)
     
     return results, model.summary()
@@ -440,7 +461,7 @@ print("\nFitting logistic regression...")
 res_interviews, event_model_summary = run_event_analysis(df, 'has_interview_upload', "Interviews")
 
 def plot_odds_ratios(results):
-    """Plot odds ratios with confidence intervals."""
+    """Plot odds ratios with confidence intervals from mixed model."""
     r = results.drop('Intercept')
     r = r[(r['OR'] > 1e-6) & (r['OR'] < 1e6)]  # Filter numerical issues
     
@@ -451,7 +472,7 @@ def plot_odds_ratios(results):
     fig, ax = plt.subplots(figsize=(10, 6))
     
     y = np.arange(len(r))
-    ax.barh(y, r['OR'], xerr=[r['OR']-r['Lower'], r['Upper']-r['OR']], 
+    ax.barh(y, r['OR'], xerr=[r['OR']-r['OR_Lower'], r['OR_Upper']-r['OR']], 
             capsize=5, color='skyblue', edgecolor='black')
     
     ax.set_yticks(y)
@@ -459,7 +480,7 @@ def plot_odds_ratios(results):
     ax.axvline(x=1, color='red', linestyle='--', linewidth=2, alpha=0.7)
     ax.set_xlabel('Odds Ratio')
     ax.set_xscale('log')
-    ax.set_title('Event-Level Predictors of Interview Participation')
+    ax.set_title('Event-Level Predictors of Interview Participation\n(Logistic Regression with Cluster-Robust SEs)')
     ax.grid(axis='x', alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, 'odds_ratios.png'))
@@ -833,6 +854,8 @@ def generate_markdown_report(df_recs, df_interviews, res_interviews, event_model
         
         f.write("## 2. Event-Level Analysis\n\n")
         f.write("Logistic regression predicting interview participation from recording characteristics.\n\n")
+        f.write("**Important:** This model uses **Cluster-Robust Standard Errors** (clustered by User ID). ")
+        f.write("This accounts for the non-independence of multiple recordings from the same user (pseudoreplication), ensuring that p-values and confidence intervals are statistically valid without assuming independence between a user's own recordings.\n\n")
         
         f.write("### Variables\n\n")
         f.write("* `days_since_launch` - Days since feature launch\n")
@@ -850,15 +873,17 @@ def generate_markdown_report(df_recs, df_interviews, res_interviews, event_model
         f.write(str(event_model_summary))
         f.write("\n```\n\n")
 
-        f.write("### Odds Ratios\n\n")
-        f.write("| Factor | Odds Ratio | 95% CI | p-value |\n")
-        f.write("| :--- | :---: | :---: | :---: |\n")
+        f.write("### Odds Ratios (Robust SEs)\n\n")
+        f.write("Odds ratios are computed as exp(coefficient). ")
+        f.write("Standard errors and p-values are robust to within-user correlation.\n\n")
+        f.write("| Factor | Coefficient | Odds Ratio | 95% CI | p-value |\n")
+        f.write("| :--- | :---: | :---: | :---: | :---: |\n")
         
         for idx in res_interviews.index:
             if idx == 'Intercept': continue
             r = res_interviews.loc[idx]
             name = idx.replace('np.log(', '').replace(')', '')
-            f.write(f"| {name} | {r['OR']:.2f} | [{r['Lower']:.2f}, {r['Upper']:.2f}] | {r['p-value']:.3f} |\n")
+            f.write(f"| {name} | {r['Coefficient']:.3f} | {r['OR']:.2f} | [{r['OR_Lower']:.2f}, {r['OR_Upper']:.2f}] | {r['p-value']:.3f} |\n")
             
         f.write("\n")
         
