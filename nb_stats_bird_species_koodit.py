@@ -28,6 +28,7 @@ warnings.filterwarnings('ignore')
 
 from utils_stats import (
     run_chi_square_tests,
+    run_mixed_effects_tests,
     calculate_cooccurrence_matrix,
     plot_cooccurrence_heatmap,
     plot_cooccurrence_percentage_heatmap,
@@ -83,12 +84,24 @@ for species, prev in top_species.items():
 
 birds_raw = birds_raw[top_species.index]
 
-koodit_raw = pd.read_csv('./output/analyysi_koodit/88d43208/themes_98x452.csv', index_col=0)
+koodit_raw = pd.read_csv('./output/analyysi_koodit/7176421e/themes_98x710.csv', index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
 common_ids = birds_raw.index.intersection(koodit_raw.index)
 predictor_binary = birds_raw.loc[common_ids].astype(int)
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
+
+# Load user IDs for clustered standard errors
+# Recording metadata contains user information
+recs_metadata = pd.read_csv('./inputs/bird-metadata/recs_since_June25.csv')
+recs_metadata = recs_metadata.set_index('rec_id')
+user_ids = recs_metadata.loc[common_ids, 'user']
+
+print(f"\nUser statistics:")
+print(f"  Total recordings: {len(user_ids)}")
+print(f"  Unique users: {user_ids.nunique()}")
+print(f"  Users with multiple recordings: {(user_ids.value_counts() > 1).sum()}")
+print(f"  Max recordings per user: {user_ids.value_counts().max()}")
 
 prevalence = outcome_binary.mean()
 themes_to_keep = prevalence[(prevalence >= MIN_THEME_PREVALENCE) & (prevalence <= MAX_THEME_PREVALENCE)].index
@@ -130,16 +143,53 @@ plot_cooccurrence_percentage_heatmap(
     footnote=FOOTNOTE_METHOD
 )
 
-# %% ═════════ 3. Chi-Square Tests ═════════
+# %% ═════════ 3. Statistical Tests (Mixed-Effects Models) ═════════
 
 # %%
 print("\n" + "=" * 70)
-print("CHI-SQUARE TESTS")
+print("STATISTICAL TESTS")
 print("=" * 70)
+print("\nMethod: Mixed-effects logistic regression (glmer)")
+print("  - Accounts for non-independence via random user intercepts")
+print("  - Explicitly models between-user variance")
+print("  - Penalizes associations driven by single-user concentration")
+print("  - Effect sizes from chi-square (descriptive, unbiased)")
+print("  - P-values from random effects model (inferential, corrected)")
 
-results_df = run_chi_square_tests(predictor_binary, outcome_binary)
+# Run chi-square for effect sizes
+chi_results = run_chi_square_tests(predictor_binary, outcome_binary)
+
+# Run mixed-effects models for corrected p-values
+print("\nFitting mixed-effects models (this may take several minutes)...")
+glmer_results = run_mixed_effects_tests(predictor_binary, outcome_binary, user_ids)
+
+# Merge: Keep effect sizes from chi-square, p-values from glmer
+results_df = chi_results[['Outcome', 'Predictor', 'Chi2', 'Cramers_V', 
+                           'P(Outcome|Pred)', 'P(Outcome|~Pred)', 'Difference']].copy()
+
+# Add corrected p-values from mixed-effects model
+p_lookup = glmer_results.set_index(['Outcome', 'Predictor'])['p_value']
+results_df['p_value'] = results_df.apply(
+    lambda row: p_lookup.loc[(row['Outcome'], row['Predictor'])], axis=1
+)
+
+p_fdr_lookup = glmer_results.set_index(['Outcome', 'Predictor'])['p_fdr']
+results_df['p_fdr'] = results_df.apply(
+    lambda row: p_fdr_lookup.loc[(row['Outcome'], row['Predictor'])], axis=1
+)
+
+results_df['Significant'] = results_df['p_fdr'] < 0.05
+results_df = results_df.sort_values('p_value')
+
+# Report how many cases couldn't be estimated
+n_missing = results_df['p_value'].isna().sum()
+if n_missing > 0:
+    print(f"\n  Note: {n_missing} associations excluded (model failed to converge)")
+    print(f"        These typically involve perfect/quasi-perfect separation")
 
 print(f"\nResults:")
+print(f"  Total tests: {len(results_df)}")
+print(f"  Valid p-values: {(~results_df['p_value'].isna()).sum()}")
 print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value'] < 0.05).sum()}")
 print(f"  Significant (FDR q < 0.05):          {results_df['Significant'].sum()}")
 print(f"  Medium+ effect size (V > 0.20):      {(results_df['Cramers_V'] > 0.2).sum()}")
@@ -258,13 +308,14 @@ save_summary_table_image(
     output_path=f'{output_dir}/99_summary.png'
 )
 
-output_file = f'{output_dir}/chi_square_results.csv'
+output_file = f'{output_dir}/mixed_effects_results.csv'
 results_df.to_csv(output_file, index=False)
 
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
 print("=" * 70)
-print(f"\nAnalyzed: Bird species × Themes")
+print(f"\nMethod: Mixed-effects logistic regression (random user intercepts)")
+print(f"Analyzed: Bird species × Themes")
 print(f"Results: {output_file}")
 print(f"Figures: {output_dir}/")
 

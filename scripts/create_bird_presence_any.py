@@ -31,7 +31,7 @@ THRESHOLD = 0.1
 def load_target_recordings():
     """Load target recording IDs from the themes analysis."""
     rec_ids = []
-    input_path = 'output/analyysi_koodit/88d43208/themes_98x452.csv'
+    input_path = 'output/analyysi_koodit/7176421e/themes_98x710.csv'
     
     with open(input_path, 'r') as f:
         reader = csv.reader(f)

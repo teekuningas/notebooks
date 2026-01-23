@@ -27,6 +27,7 @@ warnings.filterwarnings('ignore')
 
 from utils_stats import (
     run_chi_square_tests,
+    run_mixed_effects_tests,
     plot_top_associations_barplot,
     print_summary_stats,
     print_data_summary,
@@ -62,12 +63,20 @@ birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_presence_any.csv', 
 predictor_binary = pd.DataFrame()
 predictor_binary['Bird present'] = birds_raw['any_bird'].astype(int)
 
-koodit_raw = pd.read_csv('./output/analyysi_koodit/88d43208/themes_98x452.csv', index_col=0)
+koodit_raw = pd.read_csv('./output/analyysi_koodit/7176421e/themes_98x710.csv', index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
+
+# Load user IDs for clustering
+recs_metadata = pd.read_csv('./inputs/bird-metadata/recs_since_June25.csv')
+recs_metadata = recs_metadata.set_index('rec_id')
 
 common_ids = predictor_binary.index.intersection(koodit_raw.index)
 predictor_binary = predictor_binary.loc[common_ids]
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
+
+# User IDs for clustering (aligned to common_ids)
+user_ids = recs_metadata.loc[common_ids, 'user']
+print(f"User IDs loaded: {user_ids.notna().sum()}/{len(user_ids)} valid")
 
 prevalence = outcome_binary.mean()
 themes_to_keep = prevalence[(prevalence >= MIN_THEME_PREVALENCE) & (prevalence <= MAX_THEME_PREVALENCE)].index
@@ -97,14 +106,37 @@ plot_binary_predictor_distribution(
     footnote=FOOTNOTE_METHOD
 )
 
-# %% ═════════ 3. Chi-Square Tests ═════════
+# %% ═════════ 3. Statistical Tests with Robust Standard Errors ═════════
 
 # %%
 print("\n" + "=" * 70)
-print("CHI-SQUARE TESTS")
+print("STATISTICAL TESTS")
 print("=" * 70)
+print("\nMethod: Mixed-effects logistic regression (glmer)")
+print("  - Accounts for non-independence (multiple recordings per user)")
+print("  - Effect sizes from chi-square (descriptive, unbiased)")
+print("  - P-values from robust SEs (inferential, corrected)")
 
-results_df = run_chi_square_tests(predictor_binary, outcome_binary)
+# Run chi-square for effect sizes (descriptive statistics, valid always)
+chi_results_df = run_chi_square_tests(predictor_binary, outcome_binary)
+
+# Run logistic regression with clustered SEs for p-values (inferential statistics, accounts for clustering)
+logit_results_df = run_mixed_effects_tests(predictor_binary, outcome_binary, user_ids)
+
+# Merge: Keep effect sizes from chi-square, p-values from mixed effects
+# IMPORTANT: Merge on Outcome/Predictor, don't just copy columns (results may be in different order!)
+results_df = chi_results_df.merge(
+    logit_results_df[['Outcome', 'Predictor', 'p_value', 'p_fdr', 'Significant']],
+    on=['Outcome', 'Predictor'],
+    how='left',
+    suffixes=('', '_glmer')
+)
+
+# Report excluded cases
+n_excluded = results_df['p_value'].isna().sum()
+n_total = len(results_df)
+print(f"\nConvergence check: {n_excluded}/{n_total} tests excluded (perfect separation)")
+print(f"Valid tests: {n_total - n_excluded}/{n_total} ({(n_total-n_excluded)/n_total*100:.1f}%)")
 
 print(f"\nResults:")
 print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value'] < 0.05).sum()}")
@@ -194,11 +226,13 @@ save_summary_table_image(
     output_path=f'{output_dir}/99_summary.png'
 )
 
-output_file = f'{output_dir}/chi_square_results.csv'
+output_file = f'{output_dir}/mixed_effects_results.csv'
 results_df.to_csv(output_file, index=False)
 
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
+print("=" * 70)
+print(f"\nMethod: Mixed-effects logistic regression (random user intercepts)")
 print("=" * 70)
 print(f"\nAnalyzed: Bird presence × Themes")
 print(f"  Total interviews: {len(predictor_binary)}")

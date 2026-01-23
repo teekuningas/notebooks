@@ -225,7 +225,19 @@ For the statistical analysis, we filtered the themes to include only those with 
 
 {formatted_valid_themes}
 
-The statistical analysis uses Chi-Square tests to identify associations between these themes and various predictors. P-values are corrected for multiple comparisons (FDR), and effect sizes are measured using Cramér's V.
+### Statistical method
+The analysis uses mixed-effects logistic regression (R package lme4::glmer) with random user intercepts to account for multiple interviews from the same user:
+
+```
+glmer(theme ~ predictor + (1|user), family=binomial)
+```
+
+This approach:
+- Controls for user-level confounding (some users contributed multiple interviews)
+- Accounts for within-user correlation
+- Provides valid inference even with unbalanced user contributions
+
+Effect sizes are calculated using Chi-Square tests and Cramér's V (descriptive statistics). P-values from the mixed-effects models are corrected for multiple comparisons using False Discovery Rate (FDR, Benjamini-Hochberg method).
 """
 
     output_file = "output/METHODOLOGY_SUMMARY.md"

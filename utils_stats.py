@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import chi2_contingency, false_discovery_control
 from matplotlib.colors import TwoSlopeNorm
+import statsmodels.formula.api as smf
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -93,6 +94,94 @@ def run_chi_square_tests(predictors, outcomes):
     df = df.sort_values('p_value')
     
     return df
+
+
+
+
+
+def run_mixed_effects_tests(predictors, outcomes, user_ids, r_script_path='scripts/run_glmer_tests.R'):
+    """
+    Run mixed-effects logistic regression (glmer) via R for all predictor-outcome pairs.
+    Accounts for non-independence by explicitly modeling user-level random intercepts.
+    
+    This properly handles user concentration effects by explicitly modeling between-user
+    variance, preventing spurious associations driven by repeated measurements from
+    a small number of users.
+    
+    Args:
+        predictors: Binary DataFrame (rec_id × predictor variables)
+        outcomes: Binary DataFrame (rec_id × outcome variables)
+        user_ids: Series or array of user IDs (same index as predictors/outcomes)
+        r_script_path: Path to R script that runs glmer models
+        
+    Returns:
+        DataFrame with columns: Predictor, Outcome, Coefficient, p_value, 
+                                P(Outcome|Pred), P(Outcome|~Pred), Difference,
+                                p_fdr, Significant
+    """
+    import subprocess
+    import tempfile
+    import os
+    
+    # Prepare data for R
+    # Merge predictors, outcomes, and user_ids into single dataframe
+    data_for_r = pd.DataFrame({
+        'user': user_ids
+    }, index=predictors.index)
+    
+    # Add all predictor columns with prefix
+    for col in predictors.columns:
+        data_for_r[f'pred_{col}'] = predictors[col].astype(int)
+    
+    # Add all outcome columns with prefix
+    for col in outcomes.columns:
+        data_for_r[f'out_{col}'] = outcomes[col].astype(int)
+    
+    # Save to temporary CSV
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        temp_data_file = f.name
+        data_for_r.to_csv(f, index=True)
+    
+    # Create temporary output file
+    temp_output_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False).name
+    
+    try:
+        # Call R script
+        result = subprocess.run([
+            r_script_path,
+            temp_data_file,
+            temp_output_file,
+            str(len(predictors.columns)),
+            str(len(outcomes.columns))
+        ], check=True, capture_output=True, text=True)
+        
+        # Print R output for monitoring
+        if result.stdout:
+            print(result.stdout)
+        
+        # Read results from R
+        df = pd.read_csv(temp_output_file)
+        
+        # Apply FDR correction
+        valid_pvals = df['p_value'].notna()
+        if valid_pvals.sum() > 0:
+            df.loc[valid_pvals, 'p_fdr'] = false_discovery_control(
+                df.loc[valid_pvals, 'p_value'], method='bh'
+            )
+        else:
+            df['p_fdr'] = np.nan
+        
+        df['Significant'] = df['p_fdr'] < 0.05
+        df = df.sort_values('p_value')
+        
+        return df
+        
+    finally:
+        # Clean up temporary files
+        if os.path.exists(temp_data_file):
+            os.unlink(temp_data_file)
+        if os.path.exists(temp_output_file):
+            os.unlink(temp_output_file)
 
 
 def calculate_cooccurrence_matrix(binary_df):
