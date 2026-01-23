@@ -115,9 +115,9 @@ def run_mixed_effects_tests(predictors, outcomes, user_ids, r_script_path='scrip
         r_script_path: Path to R script that runs glmer models
         
     Returns:
-        DataFrame with columns: Predictor, Outcome, Coefficient, p_value, 
-                                P(Outcome|Pred), P(Outcome|~Pred), Difference,
+        DataFrame with columns: Outcome, Predictor, Coefficient, Odds_Ratio, p_value,
                                 p_fdr, Significant
+        Note: No Difference (%) column - use Coefficient (log-odds) for directional effect
     """
     import subprocess
     import tempfile
@@ -201,22 +201,23 @@ def calculate_cooccurrence_matrix(binary_df):
 # Annotation & Display Helpers
 # ═══════════════════════════════════════════════════════════════════════════
 
-def create_significance_annotations(cramers_matrix, pval_matrix):
+def create_significance_annotations(effect_matrix, pval_matrix, stats_mode='chisquared'):
     """
     Create annotation matrix with effect sizes and significance stars.
     
     Args:
-        cramers_matrix: DataFrame of Cramér's V values
+        effect_matrix: DataFrame of effect size values (Cramér's V or Coefficient)
         pval_matrix: DataFrame of FDR-corrected p-values
+        stats_mode: 'chisquared' or 'random_effects'
         
     Returns:
-        numpy array of strings like "0.25***"
+        numpy array of strings like "0.25***" or "0.75***"
     """
-    annot_matrix = np.empty(cramers_matrix.shape, dtype=object)
+    annot_matrix = np.empty(effect_matrix.shape, dtype=object)
     
-    for i in range(cramers_matrix.shape[0]):
-        for j in range(cramers_matrix.shape[1]):
-            v = cramers_matrix.iloc[i, j]
+    for i in range(effect_matrix.shape[0]):
+        for j in range(effect_matrix.shape[1]):
+            v = effect_matrix.iloc[i, j]
             p = pval_matrix.iloc[i, j]
             
             # Add significance markers
@@ -234,12 +235,13 @@ def create_significance_annotations(cramers_matrix, pval_matrix):
     return annot_matrix
 
 
-def print_summary_stats(results_df):
+def print_summary_stats(results_df, stats_mode='chisquared'):
     """
-    Print summary statistics from chi-square results.
+    Print summary statistics from chi-square or mixed effects results.
     
     Args:
-        results_df: DataFrame from run_chi_square_tests()
+        results_df: DataFrame from run_chi_square_tests() or run_mixed_effects_tests()
+        stats_mode: 'chisquared' or 'random_effects'
     """
     print("\n" + "=" * 70)
     print("SUMMARY STATISTICS")
@@ -251,19 +253,34 @@ def print_summary_stats(results_df):
     print(f"Significant (FDR q<0.05):           {results_df['Significant'].sum()}")
     
     # Effect size distribution
-    print(f"\nEffect size distribution:")
-    print(f"  Large (V > 0.50):         {(results_df['Cramers_V'] > 0.5).sum()}")
-    print(f"  Medium (0.30 < V < 0.50): {((results_df['Cramers_V'] > 0.3) & (results_df['Cramers_V'] <= 0.5)).sum()}")
-    print(f"  Small (0.10 < V < 0.30):  {((results_df['Cramers_V'] > 0.1) & (results_df['Cramers_V'] <= 0.3)).sum()}")
-    print(f"  Negligible (V < 0.10):    {(results_df['Cramers_V'] <= 0.1).sum()}")
+    if stats_mode == 'chisquared':
+        print(f"\nEffect size distribution (Cramér's V):")
+        print(f"  Large (V > 0.50):         {(results_df['Cramers_V'] > 0.5).sum()}")
+        print(f"  Medium (0.30 < V < 0.50): {((results_df['Cramers_V'] > 0.3) & (results_df['Cramers_V'] <= 0.5)).sum()}")
+        print(f"  Small (0.10 < V < 0.30):  {((results_df['Cramers_V'] > 0.1) & (results_df['Cramers_V'] <= 0.3)).sum()}")
+        print(f"  Negligible (V < 0.10):    {(results_df['Cramers_V'] <= 0.1).sum()}")
+        
+        # Practical significance
+        sig_assocs = results_df[results_df['Significant']]
+        if len(sig_assocs) > 0:
+            print(f"\nAmong significant associations:")
+            print(f"  Mean effect size (Cramér's V):    {sig_assocs['Cramers_V'].mean():.3f}")
+            print(f"  Mean percentage point difference:  {sig_assocs['Difference'].abs().mean():.1f} pp")
+            print(f"  Largest difference:                {sig_assocs['Difference'].abs().max():.1f} pp")
     
-    # Practical significance
-    sig_assocs = results_df[results_df['Significant']]
-    if len(sig_assocs) > 0:
-        print(f"\nAmong significant associations:")
-        print(f"  Mean effect size (Cramér's V):    {sig_assocs['Cramers_V'].mean():.3f}")
-        print(f"  Mean percentage point difference:  {sig_assocs['Difference'].abs().mean():.1f} pp")
-        print(f"  Largest difference:                {sig_assocs['Difference'].abs().max():.1f} pp")
+    elif stats_mode == 'random_effects':
+        print(f"\nEffect size distribution (log-odds):")
+        print(f"  Large (|log-odds| > 1.0):        {(results_df['Coefficient'].abs() > 1.0).sum()}")
+        print(f"  Medium (0.6 < |log-odds| < 1.0): {((results_df['Coefficient'].abs() > 0.6) & (results_df['Coefficient'].abs() <= 1.0)).sum()}")
+        print(f"  Small (0.5 < |log-odds| < 0.6):  {((results_df['Coefficient'].abs() > 0.5) & (results_df['Coefficient'].abs() <= 0.6)).sum()}")
+        print(f"  Negligible (|log-odds| < 0.5):   {(results_df['Coefficient'].abs() <= 0.5).sum()}")
+        
+        # Practical significance
+        sig_assocs = results_df[results_df['Significant']]
+        if len(sig_assocs) > 0:
+            print(f"\nAmong significant associations:")
+            print(f"  Mean |log-odds|:                   {sig_assocs['Coefficient'].abs().mean():.3f}")
+            print(f"  Mean odds ratio:                   {sig_assocs['Odds_Ratio'].mean():.2f}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -352,27 +369,35 @@ def plot_cooccurrence_percentage_heatmap(cooccurrence_matrix, title, xlabel, yla
 
 def plot_effect_size_heatmap(results_df, title, xlabel, ylabel, 
                               output_path, figsize=(12, 9), vmax=0.4, footnote=None, 
-                              p_fdr_col='p_fdr'):
+                              stats_mode='chisquared'):
     """
     Plot heatmap of effect sizes with significance annotations.
     
     Args:
-        results_df: DataFrame from run_chi_square_tests()
+        results_df: DataFrame from run_chi_square_tests() or run_mixed_effects_tests()
         title: Plot title
         xlabel, ylabel: Axis labels
         output_path: Where to save figure
         figsize: Figure dimensions
         vmax: Maximum value for color scale
         footnote: Optional footnote text
-        p_fdr_col: Name of the p_fdr column to use (default: 'p_fdr')
+        stats_mode: 'chisquared' or 'random_effects'
     """
+    # Choose columns based on stats mode
+    if stats_mode == 'random_effects':
+        effect_col = 'Coefficient'
+        effect_label = 'Log-odds'
+    else:  # chisquared
+        effect_col = 'Cramers_V'
+        effect_label = "Cramér's V"
+    
     # Pivot to matrices
-    pivot_pval = results_df.pivot(index='Outcome', columns='Predictor', values=p_fdr_col)
-    pivot_cramers = results_df.pivot(index='Outcome', columns='Predictor', values='Cramers_V')
+    pivot_pval = results_df.pivot(index='Outcome', columns='Predictor', values='p_fdr')
+    pivot_effect = results_df.pivot(index='Outcome', columns='Predictor', values=effect_col)
     
     # Dynamic font sizing based on number of outcomes
-    n_outcomes = len(pivot_cramers.index)
-    n_predictors = len(pivot_cramers.columns)
+    n_outcomes = len(pivot_effect.index)
+    n_predictors = len(pivot_effect.columns)
     
     if n_outcomes <= 30:
         ylabel_fontsize = 9
@@ -401,18 +426,29 @@ def plot_effect_size_heatmap(results_df, title, xlabel, ylabel,
     bottom_frac = bottom_margin / height
     
     # Create annotations
-    annot_matrix = create_significance_annotations(pivot_cramers, pivot_pval)
+    annot_matrix = create_significance_annotations(pivot_effect, pivot_pval, stats_mode)
     
     # Plot
     fig, ax = plt.subplots(figsize=figsize)
-    hm = sns.heatmap(pivot_cramers, annot=annot_matrix, fmt='', cmap='YlGn',
-                     vmin=0, vmax=vmax, ax=ax,
-                     cbar_kws={'label': ''},
-                     yticklabels=True, annot_kws={'fontsize': annot_fontsize})
+    
+    # Use YlGn colormap for both modes for consistency
+    # For random_effects, show absolute values in heatmap (magnitude of effect)
+    if stats_mode == 'random_effects':
+        # Show absolute coefficient values (magnitude matters more than direction for heatmap)
+        pivot_effect_abs = pivot_effect.abs()
+        hm = sns.heatmap(pivot_effect_abs, annot=annot_matrix, fmt='', cmap='YlGn',
+                         vmin=0, vmax=vmax, ax=ax,
+                         cbar_kws={'label': ''},
+                         yticklabels=True, annot_kws={'fontsize': annot_fontsize})
+    else:  # chisquared
+        hm = sns.heatmap(pivot_effect, annot=annot_matrix, fmt='', cmap='YlGn',
+                         vmin=0, vmax=vmax, ax=ax,
+                         cbar_kws={'label': ''},
+                         yticklabels=True, annot_kws={'fontsize': annot_fontsize})
     
     # Style colorbar to match axis labels
     cbar = hm.collections[0].colorbar
-    cbar.set_label("Cramér's V", fontsize=12, labelpad=15)
+    cbar.set_label(effect_label, fontsize=12, labelpad=15)
     
     # Borders
     ax.axhline(y=0, color='k', linewidth=2)
@@ -589,31 +625,35 @@ def plot_binary_predictor_prevalence(results_df, label_pred, label_not_pred,
 
 def plot_top_associations_barplot(results_df, title, output_path, 
                                     min_effect=0.1, figsize=(12, 9), footnote=None,
-                                    p_fdr_col='p_fdr', p_value_col='p_value'):
+                                    stats_mode='chisquared'):
     """
     Plot ranked bar plot of top associations.
     
     Args:
-        results_df: DataFrame from run_chi_square_tests()
+        results_df: DataFrame from run_chi_square_tests() or run_mixed_effects_tests()
         title: Plot title
         output_path: Where to save figure
-        min_effect: Minimum Cramér's V to include
+        min_effect: Minimum effect size to include (V for chisquared, |coef| for random_effects)
         figsize: Figure dimensions
         footnote: Optional footnote text
-        p_fdr_col: Name of the p_fdr column (default: 'p_fdr')
-        p_value_col: Name of the p_value column (default: 'p_value')
+        stats_mode: 'chisquared' or 'random_effects'
     """
-    # Filter for strong effects
-    strong_effects = results_df[results_df['Cramers_V'] >= min_effect].copy()
+    # Choose filtering based on stats mode
+    if stats_mode == 'random_effects':
+        effect_col = 'Coefficient'
+        strong_effects = results_df[results_df[effect_col].abs() >= min_effect].copy()
+        # For random effects, also require at least nominal significance
+        # This prevents showing huge effect sizes that are just noise
+        strong_effects = strong_effects[strong_effects['p_value'] < 0.05]
+    else:  # chisquared
+        effect_col = 'Cramers_V'
+        strong_effects = results_df[results_df[effect_col] >= min_effect].copy()
+        # Chi-squared: V alone is sufficient (test is built-in)
     
-    # Filter out results with very weak raw p-values (p > 0.10)
-    # This keeps "suggestive" results but removes pure noise
-    strong_effects = strong_effects[strong_effects[p_value_col] < 0.10]
-    
-    strong_effects = strong_effects.sort_values(p_value_col)
+    strong_effects = strong_effects.sort_values('p_value')
     
     if len(strong_effects) == 0:
-        print(f"No associations with V >= {min_effect} found.")
+        print(f"No associations with effect >= {min_effect} found.")
         return
     
     # Dynamic font sizing based on number of items
@@ -654,23 +694,39 @@ def plot_top_associations_barplot(results_df, title, output_path,
     labels = [f"{row['Outcome']} × {row['Predictor']}" 
               for _, row in strong_effects.iterrows()]
     
-    # Color by direction
-    differences = strong_effects['Difference'].values
-    abs_max = np.abs(differences).max()
-    sym_limit = np.ceil(abs_max / 10) * 10 if abs_max > 0 else 10
+    # Color by direction (use Coefficient for random_effects, Difference for chisquared)
+    if stats_mode == 'random_effects':
+        color_values = strong_effects['Coefficient'].values
+        color_label = 'Log-odds'
+    else:
+        color_values = strong_effects['Difference'].values
+        color_label = 'Difference (%)'
+    
+    abs_max = np.abs(color_values).max()
+    
+    # Use sensible color scale limits based on actual data
+    # For log-odds: typical range is -3 to +3, extend slightly for visibility
+    # For difference: typical range is -50 to +50, extend slightly
+    if stats_mode == 'random_effects':
+        # Round to nearest integer, with minimum range of ±2
+        sym_limit = max(2.0, np.ceil(abs_max))
+    else:
+        # For percentage differences, round to nearest 10
+        sym_limit = max(10.0, np.ceil(abs_max / 10) * 10)
+    
     vmin, vmax = -sym_limit, sym_limit
     
     # Handle edge cases for colormap
-    vmin_orig, vmax_orig = differences.min(), differences.max()
+    vmin_orig, vmax_orig = color_values.min(), color_values.max()
     if vmin_orig >= 0:  # All positive
         norm = plt.Normalize(vmin=0, vmax=vmax)
-        colors = plt.cm.Greens(norm(differences))
+        colors = plt.cm.Greens(norm(color_values))
     elif vmax_orig <= 0:  # All negative
         norm = plt.Normalize(vmin=vmin, vmax=0)
-        colors = plt.cm.Purples(norm(differences))
+        colors = plt.cm.Purples(norm(color_values))
     else:  # Mixed
         norm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
-        colors = plt.cm.PRGn(norm(differences))
+        colors = plt.cm.PRGn(norm(color_values))
     
     # Plot bars
     y_pos = np.arange(len(strong_effects))
@@ -678,23 +734,30 @@ def plot_top_associations_barplot(results_df, title, output_path,
     # Use raw p-value for bar length instead of FDR q-value
     # This prevents the "staircase" effect where many items have identical q=1.0
     # We still use FDR for significance testing/stars
-    bar_lengths = -np.log10(strong_effects[p_value_col])
+    bar_lengths = -np.log10(strong_effects['p_value'])
     
     ax.barh(y_pos, bar_lengths, 
             color=colors, edgecolor='black', linewidth=0.5)
     
     # Annotations
     for i, (_, row) in enumerate(strong_effects.iterrows()):
-        diff_text = f"{row['Difference']:+.1f}%"
+        if stats_mode == 'random_effects':
+            # Show log-odds coefficient directly (matches color scale)
+            coef_val = row['Coefficient']
+            annot_text = f"{coef_val:+.2f}"
+        else:
+            # Show difference percentage
+            annot_text = f"{row['Difference']:+.1f}%"
+        
         # Add stars if FDR significant
         stars = ""
-        if row[p_fdr_col] < 0.001: stars = "***"
-        elif row[p_fdr_col] < 0.01: stars = "**"
-        elif row[p_fdr_col] < 0.05: stars = "*"
+        if row['p_fdr'] < 0.001: stars = "***"
+        elif row['p_fdr'] < 0.01: stars = "**"
+        elif row['p_fdr'] < 0.05: stars = "*"
         
         # Position text
         text_pos = bar_lengths.iloc[i] + 0.1
-        ax.text(text_pos, i, f"{diff_text} {stars}",
+        ax.text(text_pos, i, f"{annot_text} {stars}",
                 va='center', fontsize=annot_fontsize, fontweight='bold')
     
     # Styling
@@ -730,7 +793,7 @@ def plot_top_associations_barplot(results_df, title, output_path,
     sm = plt.cm.ScalarMappable(cmap=plt.cm.PRGn, norm=norm)
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=ax, pad=0.01, aspect=cbar_aspect, shrink=0.8)
-    cbar.set_label('Difference (%)', rotation=270, labelpad=20, fontsize=12)
+    cbar.set_label(color_label, rotation=270, labelpad=20, fontsize=12)
     
     plt.subplots_adjust(left=0.35, right=0.95, top=top_frac, bottom=bottom_frac)
     plt.savefig(output_path, dpi=300)
@@ -739,19 +802,18 @@ def plot_top_associations_barplot(results_df, title, output_path,
 
 
 def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(12, 12),
-                            significant_col='Significant', p_value_col='p_value'):
+                            stats_mode='chisquared'):
     """
     Render a summary table of statistical results as an image.
     Includes overall stats and a table of top associations (significant or suggestive).
     
     Args:
-        results_df: DataFrame from run_chi_square_tests()
+        results_df: DataFrame from run_chi_square_tests() or run_mixed_effects_tests()
         title: Title for the summary page
         output_path: Where to save the PNG
         top_n: Number of top associations to list
         figsize: Figure dimensions
-        significant_col: Name of the Significant column (default: 'Significant')
-        p_value_col: Name of the p_value column (default: 'p_value')
+        stats_mode: 'chisquared' or 'random_effects'
     """
     fig, ax = plt.subplots(figsize=figsize)
     ax.axis('off')
@@ -762,15 +824,23 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
     
     # 2. Overall Statistics
     n_total = len(results_df)
-    n_sig_unc = (results_df[p_value_col] < 0.05).sum()
-    n_sig_fdr = results_df[significant_col].sum()
-    max_v = results_df['Cramers_V'].max()
+    n_sig_unc = (results_df['p_value'] < 0.05).sum()
+    n_sig_fdr = results_df['Significant'].sum()
+    
+    if stats_mode == 'chisquared':
+        max_effect = results_df['Cramers_V'].max()
+        effect_label = "Strongest effect size (V):"
+        effect_str = f"{max_effect:.3f}"
+    else:  # random_effects
+        max_effect = results_df['Coefficient'].abs().max()
+        effect_label = "Strongest effect (|coef|):"
+        effect_str = f"{max_effect:.3f}"
     
     stats_text = (
         f"Total tests performed:        {n_total}\n"
         f"Significant (raw p < 0.05):   {n_sig_unc} ({n_sig_unc/n_total*100:.1f}%)\n"
         f"Significant (FDR q < 0.05):   {n_sig_fdr} ({n_sig_fdr/n_total*100:.1f}%)\n"
-        f"Strongest effect size (V):    {max_v:.3f}"
+        f"{effect_label:30s}{effect_str}"
     )
     
     # Draw a box for stats
@@ -779,44 +849,60 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
     
     # 3. Top Associations Table
     # Determine if we show significant or just top suggestive
-    sig_df = results_df[results_df[significant_col]].sort_values('Cramers_V', ascending=False)
+    sig_df = results_df[results_df['Significant']].copy()
+    
+    if stats_mode == 'chisquared':
+        sort_col = 'Cramers_V'
+    else:  # random_effects
+        # Sort by absolute coefficient
+        sig_df = sig_df.copy()
+        sig_df['abs_coef'] = sig_df['Coefficient'].abs()
+        sort_col = 'abs_coef'
     
     if len(sig_df) > 0:
         table_title = f"Top {top_n} Significant Associations (by Effect Size)"
-        display_df = sig_df.head(top_n)
+        display_df = sig_df.sort_values(sort_col, ascending=False).head(top_n)
         footer_note = "Showing statistically significant results (FDR q < 0.05)."
     else:
         table_title = f"Top {top_n} Suggestive Associations (by p-value) - NOT SIGNIFICANT"
-        display_df = results_df.sort_values(p_value_col, ascending=True).head(top_n)
+        display_df = results_df.sort_values('p_value', ascending=True).head(top_n)
         footer_note = "No significant results found. Showing top associations by raw p-value for exploration."
     
     ax.text(0.1, 0.65, table_title, fontsize=14, fontweight='bold')
     
     if len(display_df) > 0:
         table_data = []
-        # Columns: Outcome, Predictor, Chi2, p, V, Diff
-        col_labels = ['Outcome', 'Predictor', 'Chi²', 'p-value', "V", 'Diff']
         
-        for _, row in display_df.iterrows():
-            # Truncate long names if needed
-            outcome = row['Outcome']
-            if len(outcome) > 40: outcome = outcome[:37] + "..."
-            
-            predictor = row['Predictor']
-            if len(predictor) > 25: predictor = predictor[:22] + "..."
-            
-            table_data.append([
-                outcome,
-                predictor,
-                f"{row['Chi2']:.1f}",
-                f"{row[p_value_col]:.3f}",
-                f"{row['Cramers_V']:.2f}",
-                f"{row['Difference']:+.1f}%"
-            ])
+        if stats_mode == 'chisquared':
+            # Columns: Outcome, Predictor, Chi2, p, V, Diff
+            col_labels = ['Outcome', 'Predictor', 'Chi²', 'p-value', "V", 'Diff']
+            for _, row in display_df.iterrows():
+                table_data.append([
+                    row['Outcome'][:20],  # Truncate long names
+                    row['Predictor'][:20],
+                    f"{row['Chi2']:.1f}",
+                    f"{row['p_value']:.2e}",
+                    f"{row['Cramers_V']:.2f}",
+                    f"{row['Difference']:+.1f}%"
+                ])
+        else:  # random_effects
+            # Columns: Outcome, Predictor, Coef, OR, p-value
+            col_labels = ['Outcome', 'Predictor', 'Coef', 'OR', 'p-value']
+            for _, row in display_df.iterrows():
+                table_data.append([
+                    row['Outcome'][:20],  # Truncate long names
+                    row['Predictor'][:20],
+                    f"{row['Coefficient']:.2f}",
+                    f"{row['Odds_Ratio']:.2f}",
+                    f"{row['p_value']:.2e}"
+                ])
         
         # Create table with specific column widths to avoid cutting off text
         # Widths sum to ~0.9 (leaving margins)
-        col_widths = [0.35, 0.20, 0.08, 0.09, 0.08, 0.10]
+        if stats_mode == 'chisquared':
+            col_widths = [0.35, 0.20, 0.08, 0.09, 0.08, 0.10]
+        else:  # random_effects - one fewer column
+            col_widths = [0.35, 0.25, 0.10, 0.10, 0.10]
         
         table = ax.table(cellText=table_data, colLabels=col_labels, colWidths=col_widths,
                          loc='center', cellLoc='left', bbox=[0.05, 0.05, 0.9, 0.58])

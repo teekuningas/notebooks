@@ -69,21 +69,13 @@ for (i in seq_along(pred_cols)) {
         Outcome = out_name,
         Predictor = pred_name,
         Coefficient = NA,
+        Odds_Ratio = NA,
         p_value = NA,
-        'P(Outcome|Pred)' = NA,
-        'P(Outcome|~Pred)' = NA,
-        Difference = NA,
         check.names = FALSE
       ))
       n_failed <- n_failed + 1
       next
     }
-    
-    # Calculate conditional probabilities
-    pred_mask <- df$predictor == 1
-    p_with <- mean(df$outcome[pred_mask])
-    p_without <- mean(df$outcome[!pred_mask])
-    diff <- p_with - p_without
     
     # Fit random effects model
     tryCatch({
@@ -97,32 +89,32 @@ for (i in seq_along(pred_cols)) {
       coef_summary <- summary(model)$coefficients
       
       # Extract results
+      intercept <- coef_summary['(Intercept)', 'Estimate']
       coef <- coef_summary['predictor', 'Estimate']
       p_val <- coef_summary['predictor', 'Pr(>|z|)']
+      
+      # Calculate odds ratio for interpretation
+      odds_ratio <- exp(coef)
       
       results <- rbind(results, data.frame(
         Outcome = out_name,
         Predictor = pred_name,
         Coefficient = coef,
+        Odds_Ratio = odds_ratio,
         p_value = p_val,
-        'P(Outcome|Pred)' = p_with * 100,
-        'P(Outcome|~Pred)' = p_without * 100,
-        Difference = diff * 100,
         check.names = FALSE
       ))
       
       n_converged <- n_converged + 1
       
     }, error = function(e) {
-      # Model failed - record with NA p-value
+      # Model failed - record with NA values
       results <<- rbind(results, data.frame(
         Outcome = out_name,
         Predictor = pred_name,
         Coefficient = NA,
+        Odds_Ratio = NA,
         p_value = NA,
-        'P(Outcome|Pred)' = p_with * 100,
-        'P(Outcome|~Pred)' = p_without * 100,
-        Difference = diff * 100,
         check.names = FALSE
       ))
       n_failed <<- n_failed + 1

@@ -1,13 +1,17 @@
 # Statistical analysis targets for notebooks
+# Default: Use 710 dataset with 452 prevalence filter for comparability
+
+THEMES_452 = ./output/analyysi_koodit/88d43208/themes_98x452.csv
+THEMES_710 = ./output/analyysi_koodit/7176421e/themes_98x710.csv
 
 run-esa-koodit:
-	MPLBACKEND=Agg python3 nb_stats_esa_koodit.py
+	MPLBACKEND=Agg PREVALENCE_FILTER_DATASET=$(THEMES_452) python3 nb_stats_esa_koodit.py $(THEMES_710) ./output/esa_koodit
 run-bird-groups-koodit:
-	MPLBACKEND=Agg python3 nb_stats_bird_groups_koodit.py
+	MPLBACKEND=Agg PREVALENCE_FILTER_DATASET=$(THEMES_452) python3 nb_stats_bird_groups_koodit.py $(THEMES_710) ./output/bird_groups_koodit
 run-bird-presence-koodit:
-	MPLBACKEND=Agg python3 nb_stats_bird_presence_koodit.py
+	MPLBACKEND=Agg PREVALENCE_FILTER_DATASET=$(THEMES_452) python3 nb_stats_bird_presence_koodit.py $(THEMES_710) ./output/bird_presence_koodit
 run-bird-species-koodit:
-	MPLBACKEND=Agg python3 nb_stats_bird_species_koodit.py
+	MPLBACKEND=Agg PREVALENCE_FILTER_DATASET=$(THEMES_452) python3 nb_stats_bird_species_koodit.py $(THEMES_710) ./output/bird_species_koodit
 
 run-methodology:
 	python3 nb_methodology_summary.py
@@ -47,7 +51,7 @@ pdf-interview-report:
 
 # Comparison analysis targets
 run-comparison-analysis:
-	bash run_comparison_analysis.sh
+	bash ./scripts/run_comparison_analysis.sh
 
 run-comparison-plots:
 	MPLBACKEND=Agg python3 nb_create_comparison_plots.py

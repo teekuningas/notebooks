@@ -27,37 +27,45 @@ def get_significance_marker(p_fdr):
     else:
         return ''
 
-def create_comparison_plot(analysis_name, analysis_title, output_path, 
-                          min_effect=0.1, max_p_raw=0.10):
+def create_comparison_plot(analysis_name, analysis_title, output_path):
     """
     Create side-by-side comparison plot for one analysis type.
     Shows -log10(p_value) for associations meeting criteria in either dataset.
+    
+    Filtering strategy:
+    - Find worst (largest) p-value among FDR-significant associations in each dataset
+    - Include any association that meets this threshold in EITHER dataset
+    - This ensures all FDR-significant associations are shown, plus similar strength ones
     
     Args:
         analysis_name: Directory name (e.g., 'esa_koodit')
         analysis_title: Display title (e.g., 'ESA Habitats × Themes')
         output_path: Where to save PNG
-        min_effect: Minimum effect size to show
-        max_p_raw: Maximum uncorrected p-value to show
     """
-    # Load results
-    results_452 = pd.read_csv(f'./output/stats_comparison/452/{analysis_name}/mixed_effects_results.csv')
-    results_710 = pd.read_csv(f'./output/stats_comparison/710/{analysis_name}/mixed_effects_results.csv')
+    # Load results - now using results.csv instead of mixed_effects_results.csv
+    results_452 = pd.read_csv(f'./output/stats_comparison/452/{analysis_name}/results.csv')
+    results_710 = pd.read_csv(f'./output/stats_comparison/710/{analysis_name}/results.csv')
     
     # Create keys
     results_452['key'] = results_452['Predictor'] + ' → ' + results_452['Outcome']
     results_710['key'] = results_710['Predictor'] + ' → ' + results_710['Outcome']
     
-    # Filter for "interesting" associations (would show in top associations plot)
-    interesting_452 = results_452[
-        (results_452['Cramers_V'] >= min_effect) & 
-        (results_452['p_value'] < max_p_raw)
-    ]['key'].tolist()
+    # Find p-value thresholds: worst p-value among FDR-significant associations
+    sig_452 = results_452[results_452['Significant'] == True]
+    sig_710 = results_710[results_710['Significant'] == True]
     
-    interesting_710 = results_710[
-        (results_710['Cramers_V'] >= min_effect) & 
-        (results_710['p_value'] < max_p_raw)
-    ]['key'].tolist()
+    # If NEITHER dataset has significant associations, skip this plot
+    if len(sig_452) == 0 and len(sig_710) == 0:
+        print(f"  {analysis_title}: No FDR-significant associations in either dataset - skipping plot")
+        return
+    
+    # Use worst p-value among significant associations (or 0.001 if one dataset has none)
+    threshold_452 = sig_452['p_value'].max() if len(sig_452) > 0 else 0.001
+    threshold_710 = sig_710['p_value'].max() if len(sig_710) > 0 else 0.001
+    
+    # Include associations that meet threshold in EITHER dataset
+    interesting_452 = results_452[results_452['p_value'] <= threshold_452]['key'].tolist()
+    interesting_710 = results_710[results_710['p_value'] <= threshold_710]['key'].tolist()
     
     # Union of interesting associations
     all_interesting = sorted(set(interesting_452 + interesting_710))
@@ -66,7 +74,7 @@ def create_comparison_plot(analysis_name, analysis_title, output_path,
         print(f"  {analysis_title}: No associations meet criteria in either dataset")
         # Create empty placeholder
         fig, ax = plt.subplots(figsize=FIGSIZE)
-        ax.text(0.5, 0.5, 'No associations meet criteria\n(V ≥ 0.1, p < 0.10)\nin either dataset',
+        ax.text(0.5, 0.5, f'No FDR-significant associations\nin either dataset',
                ha='center', va='center', fontsize=14, transform=ax.transAxes)
         ax.set_xticks([])
         ax.set_yticks([])
@@ -80,17 +88,17 @@ def create_comparison_plot(analysis_name, analysis_title, output_path,
         row_452 = results_452[results_452['key'] == key]
         row_710 = results_710[results_710['key'] == key]
         
-        # Get p-values (use _glmer version for inference)
+        # Get p-values (now both datasets use unified p_value and p_fdr columns)
         if len(row_452) > 0:
-            p_val_452 = row_452['p_value_glmer'].values[0] if 'p_value_glmer' in row_452.columns else row_452['p_value'].values[0]
-            p_fdr_452 = row_452['p_fdr_glmer'].values[0] if 'p_fdr_glmer' in row_452.columns else row_452['p_fdr'].values[0]
+            p_val_452 = row_452['p_value'].values[0]
+            p_fdr_452 = row_452['p_fdr'].values[0]
         else:
             p_val_452 = 1.0
             p_fdr_452 = 1.0
             
         if len(row_710) > 0:
-            p_val_710 = row_710['p_value_glmer'].values[0] if 'p_value_glmer' in row_710.columns else row_710['p_value'].values[0]
-            p_fdr_710 = row_710['p_fdr_glmer'].values[0] if 'p_fdr_glmer' in row_710.columns else row_710['p_fdr'].values[0]
+            p_val_710 = row_710['p_value'].values[0]
+            p_fdr_710 = row_710['p_fdr'].values[0]
         else:
             p_val_710 = 1.0
             p_fdr_710 = 1.0
@@ -103,11 +111,11 @@ def create_comparison_plot(analysis_name, analysis_title, output_path,
             'p_fdr_710': p_fdr_710,
             'sig_452': p_fdr_452 < 0.05,
             'sig_710': p_fdr_710 < 0.05,
-            'min_p': min(p_val_452, p_val_710)  # For sorting
         })
     
     df = pd.DataFrame(comparison_data)
-    df = df.sort_values('min_p', ascending=True)  # Most significant first (will be at top)
+    # Sort by 710 dataset's p-value (most significant first, will be at top)
+    df = df.sort_values('p_val_710', ascending=True)
     
     # Create figure
     fig, ax = plt.subplots(figsize=FIGSIZE)
@@ -119,11 +127,12 @@ def create_comparison_plot(analysis_name, analysis_title, output_path,
     bar_452 = -np.log10(df['p_val_452'].clip(lower=1e-300))  # Avoid log(0)
     bar_710 = -np.log10(df['p_val_710'].clip(lower=1e-300))
     
-    # Plot bars
-    bars_452 = ax.barh(y_pos - bar_height/2, bar_452, bar_height,
-                       label='452 interviews', color='#7fc97f', edgecolor='black', linewidth=0.5)
-    bars_710 = ax.barh(y_pos + bar_height/2, bar_710, bar_height,
-                       label='710 interviews', color='#beaed4', edgecolor='black', linewidth=0.5)
+    # Plot bars (452 on top, 710 on bottom)
+    # Use neutral colors: steel blue and orange
+    bars_452 = ax.barh(y_pos + bar_height/2, bar_452, bar_height,
+                       label='452 interviews', color='#4682B4', edgecolor='black', linewidth=0.5)
+    bars_710 = ax.barh(y_pos - bar_height/2, bar_710, bar_height,
+                       label='710 interviews', color='#FF8C00', edgecolor='black', linewidth=0.5)
     
     # Add significance markers at the end of bars
     for idx, row in df.iterrows():
@@ -134,12 +143,12 @@ def create_comparison_plot(analysis_name, analysis_title, output_path,
         
         if sig_452:
             text_pos = bar_452.iloc[i] + 0.2
-            ax.text(text_pos, i - bar_height/2, sig_452,
+            ax.text(text_pos, i + bar_height/2, sig_452,
                    va='center', ha='left', fontsize=9, fontweight='bold')
         
         if sig_710:
             text_pos = bar_710.iloc[i] + 0.2
-            ax.text(text_pos, i + bar_height/2, sig_710,
+            ax.text(text_pos, i - bar_height/2, sig_710,
                    va='center', ha='left', fontsize=9, fontweight='bold')
     
     # Labels and styling
@@ -156,12 +165,8 @@ def create_comparison_plot(analysis_name, analysis_title, output_path,
     p_05_line = -np.log10(0.05)
     ax.axvline(p_05_line, color='gray', linestyle='--', linewidth=1, alpha=0.5, label='p=0.05')
     
-    # Footnote
-    footnote = f"Associations with V≥{min_effect} and p<{max_p_raw} in either dataset. Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
-    fig.text(0.99, 0.01, footnote, ha='right', va='bottom', fontsize=8, style='italic', color='gray')
-    
     plt.subplots_adjust(left=0.35, right=0.95, top=0.92, bottom=0.08)
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=300)
     plt.close()
     
     # Print summary
@@ -187,32 +192,30 @@ if __name__ == '__main__':
     print()
     
     # Create one plot per analysis
+    # Filtering: Include all FDR-significant + associations with similar p-values
+    # Sorting: By 710 dataset p-value
     create_comparison_plot(
         'esa_koodit',
         'ESA Habitats × Themes',
-        f'{output_dir}/comparison_esa.png',
-        min_effect=0.1
+        f'{output_dir}/comparison_esa.png'
     )
     
     create_comparison_plot(
         'bird_species_koodit',
         'Bird Species × Themes',
-        f'{output_dir}/comparison_bird_species.png',
-        min_effect=0.1
+        f'{output_dir}/comparison_bird_species.png'
     )
     
     create_comparison_plot(
         'bird_presence_koodit',
         'Bird Presence × Themes',
-        f'{output_dir}/comparison_bird_presence.png',
-        min_effect=0.1
+        f'{output_dir}/comparison_bird_presence.png'
     )
     
     create_comparison_plot(
         'bird_groups_koodit',
         'Bird Groups × Themes',
-        f'{output_dir}/comparison_bird_groups.png',
-        min_effect=0.1
+        f'{output_dir}/comparison_bird_groups.png'
     )
     
     print()

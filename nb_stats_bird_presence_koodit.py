@@ -50,6 +50,20 @@ FOOTNOTE_METHOD = "Bird presence defined as >10% confidence for any species in t
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
+# Statistical mode: 'random_effects' or 'chisquared'
+# - random_effects: Use mixed-effects logistic regression (accounts for user clustering)
+# - chisquared: Use chi-squared tests with Cramér's V (descriptive, no user correction)
+STATS_MODE = os.environ.get('STATS_MODE', 'random_effects')  # Default: random_effects
+
+if STATS_MODE not in ['random_effects', 'chisquared']:
+    raise ValueError(f"Invalid STATS_MODE: {STATS_MODE}. Must be 'random_effects' or 'chisquared'")
+
+print(f"Statistical mode: {STATS_MODE}")
+
+# Prevalence filter dataset: optional environment variable to use another dataset's 
+# prevalence for filtering (e.g., to ensure same themes across 452 and 710 comparisons)
+PREVALENCE_FILTER_DATASET = os.environ.get('PREVALENCE_FILTER_DATASET', None)
+
 # Command-line arguments: themes_file output_dir
 if len(sys.argv) >= 3:
     THEMES_FILE = sys.argv[1]
@@ -64,6 +78,8 @@ MAX_THEME_PREVALENCE = 0.80
 os.makedirs(output_dir, exist_ok=True)
 print(f"Using themes: {THEMES_FILE}")
 print(f"Output directory: {output_dir}")
+if PREVALENCE_FILTER_DATASET:
+    print(f"Prevalence filter dataset: {PREVALENCE_FILTER_DATASET}")
 
 # %% ═════════ 1. Load and Prepare Data ═════════
 
@@ -77,19 +93,31 @@ predictor_binary['Bird present'] = birds_raw['any_bird'].astype(int)
 koodit_raw = pd.read_csv(THEMES_FILE, index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
-# Load user IDs for clustering
-recs_metadata = pd.read_csv('./inputs/bird-metadata/recs_since_June25.csv')
-recs_metadata = recs_metadata.set_index('rec_id')
-
 common_ids = predictor_binary.index.intersection(koodit_raw.index)
 predictor_binary = predictor_binary.loc[common_ids]
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
 
-# User IDs for clustering (aligned to common_ids)
-user_ids = recs_metadata.loc[common_ids, 'user']
-print(f"User IDs loaded: {user_ids.notna().sum()}/{len(user_ids)} valid")
+# Load user IDs only for random_effects mode (needed for clustering)
+if STATS_MODE == 'random_effects':
+    recs_metadata = pd.read_csv('./inputs/bird-metadata/recs_since_June25.csv')
+    recs_metadata = recs_metadata.set_index('rec_id')
+    user_ids = recs_metadata.loc[common_ids, 'user']
+    print(f"User IDs loaded: {user_ids.notna().sum()}/{len(user_ids)} valid")
+else:
+    user_ids = None  # Not needed for chisquared mode
 
-prevalence = outcome_binary.mean()
+# Calculate prevalence for filtering themes
+if PREVALENCE_FILTER_DATASET:
+    # Use prevalence from specified dataset for filtering
+    filter_themes = pd.read_csv(PREVALENCE_FILTER_DATASET, index_col=0)
+    filter_themes.columns = filter_themes.columns.str.capitalize()
+    filter_outcome = (filter_themes >= 0.5).astype(int)
+    prevalence = filter_outcome.mean()
+    print(f"Using prevalence from: {PREVALENCE_FILTER_DATASET}")
+else:
+    # Use prevalence from current dataset
+    prevalence = outcome_binary.mean()
+
 themes_to_keep = prevalence[(prevalence >= MIN_THEME_PREVALENCE) & (prevalence <= MAX_THEME_PREVALENCE)].index
 print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} ({MIN_THEME_PREVALENCE*100:.0f}%-{MAX_THEME_PREVALENCE*100:.0f}% prevalence)")
 outcome_binary = outcome_binary[themes_to_keep]
@@ -117,65 +145,92 @@ plot_binary_predictor_distribution(
     footnote=FOOTNOTE_METHOD
 )
 
-# %% ═════════ 3. Statistical Tests with Robust Standard Errors ═════════
+# %% ═════════ 3. Statistical Tests ═════════
 
 # %%
 print("\n" + "=" * 70)
 print("STATISTICAL TESTS")
 print("=" * 70)
-print("\nMethod: Mixed-effects logistic regression (glmer)")
-print("  - Accounts for non-independence (multiple recordings per user)")
-print("  - Effect sizes from chi-square (descriptive, unbiased)")
-print("  - P-values from robust SEs (inferential, corrected)")
 
-# Run chi-square for effect sizes (descriptive statistics, valid always)
-chi_results_df = run_chi_square_tests(predictor_binary, outcome_binary)
-
-# Run logistic regression with clustered SEs for p-values (inferential statistics, accounts for clustering)
-logit_results_df = run_mixed_effects_tests(predictor_binary, outcome_binary, user_ids)
-
-# Merge: Keep effect sizes from chi-square, p-values from mixed effects
-# IMPORTANT: Merge on Outcome/Predictor, don't just copy columns (results may be in different order!)
-results_df = chi_results_df.merge(
-    logit_results_df[['Outcome', 'Predictor', 'p_value', 'p_fdr', 'Significant']],
-    on=['Outcome', 'Predictor'],
-    how='left',
-    suffixes=('', '_glmer')
-)
-
-# Report excluded cases
-n_excluded = results_df['p_value_glmer'].isna().sum()
-n_total = len(results_df)
-print(f"\nConvergence check: {n_excluded}/{n_total} tests excluded (perfect separation)")
-print(f"Valid tests: {n_total - n_excluded}/{n_total} ({(n_total-n_excluded)/n_total*100:.1f}%)")
-
-print(f"\nResults:")
-print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value_glmer'] < 0.05).sum()}")
-print(f"  Significant (FDR q < 0.05):          {results_df['Significant_glmer'].sum()}")
-print(f"  Medium+ effect size (V > 0.20):      {(results_df['Cramers_V'] > 0.2).sum()}")
-
-print(f"\nTop 20 associations:")
-print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr_glmer', 'Cramers_V', 'Difference']].head(20).to_string(index=False))
+if STATS_MODE == 'random_effects':
+    print("\nMethod: Mixed-effects logistic regression (glmer)")
+    print("  - Accounts for non-independence (multiple recordings per user)")
+    print("  - Effect sizes: log-odds coefficients (directional)")
+    print("  - P-values from mixed-effects model with random intercepts")
+    print("  - Note: No Difference (%) - use coefficient for directional effect")
+    
+    # Run mixed-effects tests
+    results_df = run_mixed_effects_tests(predictor_binary, outcome_binary, user_ids)
+    
+    # Odds_Ratio already calculated by R script
+    
+    # Report excluded cases
+    n_excluded = results_df['p_value'].isna().sum()
+    n_total = len(results_df)
+    print(f"\nConvergence check: {n_excluded}/{n_total} tests excluded (perfect separation)")
+    print(f"Valid tests: {n_total - n_excluded}/{n_total} ({(n_total-n_excluded)/n_total*100:.1f}%)")
+    
+    # Calculate effect size threshold: We use abs(coef) >= 0.5 as meaningful
+    # This corresponds to OR >= 1.65 or OR <= 0.61 (roughly 65% increase/decrease in odds)
+    meaningful_effects = results_df['Coefficient'].abs() >= 0.5
+    
+    print(f"\nResults:")
+    print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value'] < 0.05).sum()}")
+    print(f"  Significant (FDR q < 0.05):          {results_df['Significant'].sum()}")
+    print(f"  Meaningful effect (|coef| ≥ 0.5):    {meaningful_effects.sum()}")
+    
+    print(f"\nTop 20 associations (by p-value):")
+    display_cols = ['Outcome', 'Predictor', 'Coefficient', 'Odds_Ratio', 'p_value', 'p_fdr']
+    print(results_df[display_cols].head(20).to_string(index=False))
+    
+    # Configure plotting parameters
+    effect_threshold = 0.5
+    heatmap_title = 'Effect of bird presence on theme (|log-odds|)'
+    barplot_title = f'Effect of bird presence on themes (|log-odds| ≥ {effect_threshold})'
+    heatmap_vmax = 1.5
+    
+elif STATS_MODE == 'chisquared':
+    print("\nMethod: Chi-squared tests with Cramér's V")
+    print("  - Descriptive association measure (no user correction)")
+    print("  - Effect sizes from Cramér's V")
+    print("  - P-values from chi-squared test")
+    
+    # Run chi-square tests only
+    results_df = run_chi_square_tests(predictor_binary, outcome_binary)
+    
+    print(f"\nResults:")
+    print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value'] < 0.05).sum()}")
+    print(f"  Significant (FDR q < 0.05):          {results_df['Significant'].sum()}")
+    print(f"  Medium+ effect size (V > 0.20):      {(results_df['Cramers_V'] > 0.2).sum()}")
+    
+    print(f"\nTop 20 associations:")
+    print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Difference']].head(20).to_string(index=False))
+    
+    # Configure plotting parameters
+    effect_threshold = 0.1
+    heatmap_title = 'Effect of bird presence on theme (effect size)'
+    barplot_title = f'Effect of bird presence on themes (V ≥ {effect_threshold})'
+    heatmap_vmax = 0.4
 
 # %% ═════════ 4. Heatmap ═════════
 
 # %%
 plot_effect_size_heatmap(
     results_df,
-    title='Effect of bird presence on theme (effect size)',
+    title=heatmap_title,
     xlabel='Bird Presence',
     ylabel='Theme',
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
-    vmax=0.4,
+    vmax=heatmap_vmax,
     footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)",
-    p_fdr_col='p_fdr_glmer'
+    stats_mode=STATS_MODE
 )
 
 # %% ═════════ 5. Significant Associations ═════════
 
 # %%
-significant = results_df[results_df['Significant_glmer']].copy()
+significant = results_df[results_df['Significant']].copy()
 
 print("\n" + "=" * 70)
 print(f"DETAILS: {len(significant)} SIGNIFICANT ASSOCIATIONS (FDR q < 0.05)")
@@ -184,16 +239,20 @@ print("=" * 70)
 if len(significant) > 0:
     for i, (_, row) in enumerate(significant.iterrows(), 1):
         print(f"\n{i}. {row['Outcome']}")
-        print(f"   Chi² = {row['Chi2']:.2f}, p = {row['p_value_glmer']:.2e}, FDR q = {row['p_fdr_glmer']:.2e}")
-        print(f"   Cramér's V = {row['Cramers_V']:.3f}")
-        print(f"   When bird present: {row['P(Outcome|Pred)']:.1f}%")
-        print(f"   When no bird:      {row['P(Outcome|~Pred)']:.1f}%")
-        print(f"   → Difference: {row['Difference']:+.1f} percentage points")
-        
-        if row['Difference'] > 0:
-            print(f"   → Theme more common when bird present")
+        if STATS_MODE == 'random_effects':
+            print(f"   Log-odds = {row['Coefficient']:.3f}, OR = {row['Odds_Ratio']:.2f}")
+            print(f"   p = {row['p_value']:.4g}, FDR q = {row['p_fdr']:.4g}")
         else:
-            print(f"   → Theme more common when no bird")
+            print(f"   Chi² = {row['Chi2']:.2f}, p = {row['p_value']:.4g}, FDR q = {row['p_fdr']:.4g}")
+            print(f"   Cramér's V = {row['Cramers_V']:.3f}")
+            print(f"   When bird present: {row['P(Outcome|Pred)']:.1f}%")
+            print(f"   When no bird:      {row['P(Outcome|~Pred)']:.1f}%")
+            print(f"   → Difference: {row['Difference']:+.1f} percentage points")
+        
+            if row['Difference'] > 0:
+                print(f"   → Theme more common when bird present")
+            else:
+                print(f"   → Theme more common when no bird")
 else:
     print("No significant associations found.")
 
@@ -202,55 +261,66 @@ else:
 # %%
 plot_top_associations_barplot(
     results_df,
-    title='Effect of bird presence on themes (V ≥ 0.1)',
+    title=barplot_title,
     output_path=f'{output_dir}/04_top_associations.png',
-    min_effect=0.1,
+    min_effect=effect_threshold,
     figsize=STANDARD_FIGSIZE,
     footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)",
-    p_fdr_col='p_fdr_glmer',
-    p_value_col='p_value_glmer'
+    stats_mode=STATS_MODE
 )
 
 # %% ═════════ 7. Summary ═════════
 
 # %%
-print_summary_stats(results_df)
+print_summary_stats(results_df, stats_mode=STATS_MODE)
 
-sig_assocs = results_df[results_df['Significant_glmer']]
+sig_assocs = results_df[results_df['Significant']]
 if len(sig_assocs) > 0:
-    enriched = sig_assocs[sig_assocs['Difference'] > 0].sort_values('Cramers_V', ascending=False)
-    depleted = sig_assocs[sig_assocs['Difference'] < 0].sort_values('Cramers_V', ascending=False)
-    
-    print(f"\nThemes more common WHEN BIRD PRESENT ({len(enriched)}):")
-    for _, row in enriched.iterrows():
-        print(f"  {row['Outcome']:30s}  {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
-              f"(V={row['Cramers_V']:.3f}, q={row['p_fdr_glmer']:.3f})")
-    
-    print(f"\nThemes more common WHEN NO BIRD ({len(depleted)}):")
-    for _, row in depleted.iterrows():
-        print(f"  {row['Outcome']:30s}  {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
-              f"(V={row['Cramers_V']:.3f}, q={row['p_fdr_glmer']:.3f})")
+    if STATS_MODE == 'random_effects':
+        sig_assocs_sorted = sig_assocs.copy()
+        sig_assocs_sorted['abs_coef'] = sig_assocs_sorted['Coefficient'].abs()
+        enriched = sig_assocs_sorted[sig_assocs_sorted['Coefficient'] > 0].sort_values('abs_coef', ascending=False)
+        depleted = sig_assocs_sorted[sig_assocs_sorted['Coefficient'] < 0].sort_values('abs_coef', ascending=False)
+        
+        print(f"\nThemes more common WHEN BIRD PRESENT ({len(enriched)}):")
+        for _, row in enriched.iterrows():
+            print(f"  {row['Outcome']:30s}  OR={row['Odds_Ratio']:5.2f}, log-odds={row['Coefficient']:+.2f}, q={row['p_fdr']:.3f}")
+        
+        print(f"\nThemes more common WHEN NO BIRD ({len(depleted)}):")
+        for _, row in depleted.iterrows():
+            print(f"  {row['Outcome']:30s}  OR={row['Odds_Ratio']:5.2f}, log-odds={row['Coefficient']:+.2f}, q={row['p_fdr']:.3f}")
+    else:
+        enriched = sig_assocs[sig_assocs['Difference'] > 0].sort_values('Cramers_V', ascending=False)
+        depleted = sig_assocs[sig_assocs['Difference'] < 0].sort_values('Cramers_V', ascending=False)
+        
+        print(f"\nThemes more common WHEN BIRD PRESENT ({len(enriched)}):")
+        for _, row in enriched.iterrows():
+            print(f"  {row['Outcome']:30s}  {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
+                  f"(V={row['Cramers_V']:.3f}, q={row['p_fdr']:.3f})")
+        
+        print(f"\nThemes more common WHEN NO BIRD ({len(depleted)}):")
+        for _, row in depleted.iterrows():
+            print(f"  {row['Outcome']:30s}  {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
+                  f"(V={row['Cramers_V']:.3f}, q={row['p_fdr']:.3f})")
 
-# %% ═════════ 7. Save ═════════
+# %% ═════════ 8. Save ═════════
 
 # %%
 save_summary_table_image(
     results_df,
     title="Bird Presence × Themes: Statistical Summary",
     output_path=f'{output_dir}/99_summary.png',
-    significant_col='Significant_glmer',
-    p_value_col='p_value_glmer'
+    stats_mode=STATS_MODE
 )
 
-output_file = f'{output_dir}/mixed_effects_results.csv'
+output_file = f'{output_dir}/results.csv'
 results_df.to_csv(output_file, index=False)
 
 print("\n" + "=" * 70)
 print("ANALYSIS COMPLETE")
 print("=" * 70)
-print(f"\nMethod: Mixed-effects logistic regression (random user intercepts)")
-print("=" * 70)
-print(f"\nAnalyzed: Bird presence × Themes")
+print(f"\nStatistical mode: {STATS_MODE}")
+print(f"Analyzed: Bird presence × Themes")
 print(f"  Total interviews: {len(predictor_binary)}")
 print(f"  With birds: {n_with_bird} ({n_with_bird/len(predictor_binary)*100:.1f}%)")
 print(f"  Without birds: {n_without_bird} ({n_without_bird/len(predictor_binary)*100:.1f}%)")
