@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 import os
+import sys
 warnings.filterwarnings('ignore')
 
 from utils_stats import (
@@ -52,6 +53,14 @@ FOOTNOTE_METHOD = "Most prevalent species (min 10 occurrences) with >90% identif
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════
 
+# Command-line arguments: themes_file output_dir
+if len(sys.argv) >= 3:
+    THEMES_FILE = sys.argv[1]
+    output_dir = sys.argv[2]
+else:
+    THEMES_FILE = './output/analyysi_koodit/7176421e/themes_98x710.csv'
+    output_dir = './output/bird_species_koodit'
+
 # Species selection
 TOP_N_SPECIES = 20             # Show top N most common species
 
@@ -59,8 +68,9 @@ TOP_N_SPECIES = 20             # Show top N most common species
 MIN_THEME_PREVALENCE = 0.20  # 20%
 MAX_THEME_PREVALENCE = 0.80  # 80%
 
-output_dir = './output/bird_species_koodit'
 os.makedirs(output_dir, exist_ok=True)
+print(f"Using themes: {THEMES_FILE}")
+print(f"Output directory: {output_dir}")
 
 # %% ═════════ 1. Load and Prepare Data ═════════
 
@@ -84,7 +94,8 @@ for species, prev in top_species.items():
 
 birds_raw = birds_raw[top_species.index]
 
-koodit_raw = pd.read_csv('./output/analyysi_koodit/7176421e/themes_98x710.csv', index_col=0)
+# Load themes
+koodit_raw = pd.read_csv(THEMES_FILE, index_col=0)
 koodit_raw.columns = koodit_raw.columns.str.capitalize()
 
 common_ids = birds_raw.index.intersection(koodit_raw.index)
@@ -164,38 +175,31 @@ print("\nFitting mixed-effects models (this may take several minutes)...")
 glmer_results = run_mixed_effects_tests(predictor_binary, outcome_binary, user_ids)
 
 # Merge: Keep effect sizes from chi-square, p-values from glmer
-results_df = chi_results[['Outcome', 'Predictor', 'Chi2', 'Cramers_V', 
-                           'P(Outcome|Pred)', 'P(Outcome|~Pred)', 'Difference']].copy()
-
-# Add corrected p-values from mixed-effects model
-p_lookup = glmer_results.set_index(['Outcome', 'Predictor'])['p_value']
-results_df['p_value'] = results_df.apply(
-    lambda row: p_lookup.loc[(row['Outcome'], row['Predictor'])], axis=1
+# IMPORTANT: Merge on Outcome/Predictor, don't just copy columns (results may be in different order!)
+results_df = chi_results.merge(
+    glmer_results[['Outcome', 'Predictor', 'p_value', 'p_fdr', 'Significant']],
+    on=['Outcome', 'Predictor'],
+    how='left',
+    suffixes=('', '_glmer')
 )
 
-p_fdr_lookup = glmer_results.set_index(['Outcome', 'Predictor'])['p_fdr']
-results_df['p_fdr'] = results_df.apply(
-    lambda row: p_fdr_lookup.loc[(row['Outcome'], row['Predictor'])], axis=1
-)
-
-results_df['Significant'] = results_df['p_fdr'] < 0.05
-results_df = results_df.sort_values('p_value')
+results_df = results_df.sort_values('p_value_glmer')
 
 # Report how many cases couldn't be estimated
-n_missing = results_df['p_value'].isna().sum()
+n_missing = results_df['p_value_glmer'].isna().sum()
 if n_missing > 0:
     print(f"\n  Note: {n_missing} associations excluded (model failed to converge)")
     print(f"        These typically involve perfect/quasi-perfect separation")
 
 print(f"\nResults:")
 print(f"  Total tests: {len(results_df)}")
-print(f"  Valid p-values: {(~results_df['p_value'].isna()).sum()}")
-print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value'] < 0.05).sum()}")
-print(f"  Significant (FDR q < 0.05):          {results_df['Significant'].sum()}")
+print(f"  Valid p-values: {(~results_df['p_value_glmer'].isna()).sum()}")
+print(f"  Significant (p < 0.05, uncorrected): {(results_df['p_value_glmer'] < 0.05).sum()}")
+print(f"  Significant (FDR q < 0.05):          {results_df['Significant_glmer'].sum()}")
 print(f"  Medium+ effect size (V > 0.20):      {(results_df['Cramers_V'] > 0.2).sum()}")
 
 print(f"\nTop 20 associations:")
-print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Difference']].head(20).to_string(index=False))
+print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr_glmer', 'Cramers_V', 'Difference']].head(20).to_string(index=False))
 
 # %% ═════════ 4. Heatmap ═════════
 
@@ -208,13 +212,14 @@ plot_effect_size_heatmap(
     output_path=f'{output_dir}/03_effect_size_significance.png',
     figsize=STANDARD_FIGSIZE,
     vmax=0.4,
-    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)",
+    p_fdr_col='p_fdr_glmer'
 )
 
 # %% ═════════ 5. Significant Associations ═════════
 
 # %%
-significant = results_df[results_df['Significant']].copy()
+significant = results_df[results_df['Significant_glmer']].copy()
 
 print("\n" + "=" * 70)
 print(f"DETAILS: {len(significant)} SIGNIFICANT ASSOCIATIONS (FDR q < 0.05)")
@@ -223,7 +228,7 @@ print("=" * 70)
 if len(significant) > 0:
     for i, (_, row) in enumerate(significant.iterrows(), 1):
         print(f"\n{i}. {row['Outcome']} × {row['Predictor']}")
-        print(f"   Chi² = {row['Chi2']:.2f}, p = {row['p_value']:.2e}, FDR q = {row['p_fdr']:.2e}")
+        print(f"   Chi² = {row['Chi2']:.2f}, p = {row['p_value_glmer']:.2e}, FDR q = {row['p_fdr_glmer']:.2e}")
         print(f"   Cramér's V = {row['Cramers_V']:.3f}")
         print(f"   When {row['Predictor']}: {row['P(Outcome|Pred)']:.1f}%")
         print(f"   Otherwise:                {row['P(Outcome|~Pred)']:.1f}%")
@@ -240,7 +245,9 @@ plot_top_associations_barplot(
     output_path=f'{output_dir}/04_top_associations.png',
     min_effect=0.1,
     figsize=STANDARD_FIGSIZE,
-    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)"
+    footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)",
+    p_fdr_col='p_fdr_glmer',
+    p_value_col='p_value_glmer'
 )
 
 # %% ═════════ 7. Predictor Profiles ═════════
@@ -261,8 +268,8 @@ for predictor in predictor_binary.columns:
     pred_assocs['Enrichment'] = pred_assocs['P(Outcome|Pred)'] / pred_assocs['P(Outcome|~Pred)']
     pred_assocs = pred_assocs.sort_values('Enrichment', ascending=False)
     
-    enriched = pred_assocs[(pred_assocs['Significant']) & (pred_assocs['Enrichment'] > 1)].head(5)
-    depleted = pred_assocs[(pred_assocs['Significant']) & (pred_assocs['Enrichment'] < 1)].tail(3)
+    enriched = pred_assocs[(pred_assocs['Significant_glmer']) & (pred_assocs['Enrichment'] > 1)].head(5)
+    depleted = pred_assocs[(pred_assocs['Significant_glmer']) & (pred_assocs['Enrichment'] < 1)].tail(3)
     
     print(f"\n{predictor} (n = {n_pred} interviews):")
     
@@ -270,13 +277,13 @@ for predictor in predictor_binary.columns:
         print("  Enriched outcomes:")
         for _, row in enriched.iterrows():
             print(f"    • {row['Outcome']:30s} {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
-                  f"({row['Enrichment']:.2f}×, q={row['p_fdr']:.3f})")
+                  f"({row['Enrichment']:.2f}×, q={row['p_fdr_glmer']:.3f})")
     
     if len(depleted) > 0:
         print("  Depleted outcomes:")
         for _, row in depleted.iterrows():
             print(f"    • {row['Outcome']:30s} {row['P(Outcome|Pred)']:5.1f}% vs {row['P(Outcome|~Pred)']:5.1f}%  " +
-                  f"({row['Enrichment']:.2f}×, q={row['p_fdr']:.3f})")
+                  f"({row['Enrichment']:.2f}×, q={row['p_fdr_glmer']:.3f})")
     
     if len(enriched) == 0 and len(depleted) == 0:
         print("  No significant enrichments or depletions")
@@ -286,7 +293,7 @@ for predictor in predictor_binary.columns:
 # %%
 print_summary_stats(results_df)
 
-sig_assocs = results_df[results_df['Significant']]
+sig_assocs = results_df[results_df['Significant_glmer']]
 if len(sig_assocs) > 0:
     print(f"\nOutcomes most often associated with predictors:")
     outcome_counts = sig_assocs['Outcome'].value_counts().head(10)
@@ -305,7 +312,9 @@ if len(sig_assocs) > 0:
 save_summary_table_image(
     results_df,
     title="Bird Species × Themes: Statistical Summary",
-    output_path=f'{output_dir}/99_summary.png'
+    output_path=f'{output_dir}/99_summary.png',
+    significant_col='Significant_glmer',
+    p_value_col='p_value_glmer'
 )
 
 output_file = f'{output_dir}/mixed_effects_results.csv'

@@ -351,7 +351,8 @@ def plot_cooccurrence_percentage_heatmap(cooccurrence_matrix, title, xlabel, yla
 
 
 def plot_effect_size_heatmap(results_df, title, xlabel, ylabel, 
-                              output_path, figsize=(12, 9), vmax=0.4, footnote=None):
+                              output_path, figsize=(12, 9), vmax=0.4, footnote=None, 
+                              p_fdr_col='p_fdr'):
     """
     Plot heatmap of effect sizes with significance annotations.
     
@@ -363,9 +364,10 @@ def plot_effect_size_heatmap(results_df, title, xlabel, ylabel,
         figsize: Figure dimensions
         vmax: Maximum value for color scale
         footnote: Optional footnote text
+        p_fdr_col: Name of the p_fdr column to use (default: 'p_fdr')
     """
     # Pivot to matrices
-    pivot_pval = results_df.pivot(index='Outcome', columns='Predictor', values='p_fdr')
+    pivot_pval = results_df.pivot(index='Outcome', columns='Predictor', values=p_fdr_col)
     pivot_cramers = results_df.pivot(index='Outcome', columns='Predictor', values='Cramers_V')
     
     # Dynamic font sizing based on number of outcomes
@@ -478,7 +480,8 @@ def plot_binary_predictor_distribution(predictor_binary, predictor_name,
 
 
 def plot_binary_predictor_effects(results_df, title, output_path,
-                                    min_effect=0.1, figsize=(12, 9), footnote=None):
+                                    min_effect=0.1, figsize=(12, 9), footnote=None,
+                                    significant_col='Significant', p_fdr_col='p_fdr'):
     """
     Plot effect sizes for a binary predictor (horizontal bars).
     
@@ -489,6 +492,8 @@ def plot_binary_predictor_effects(results_df, title, output_path,
         min_effect: Minimum Cramér's V to include (default: 0.1)
         figsize: Figure dimensions
         footnote: Optional footnote text
+        significant_col: Name of the Significant column (default: 'Significant')
+        p_fdr_col: Name of the p_fdr column (default: 'p_fdr')
     """
     # Filter by effect size (not just significance)
     strong_effects = results_df[results_df['Cramers_V'] >= min_effect].copy()
@@ -509,8 +514,8 @@ def plot_binary_predictor_effects(results_df, title, output_path,
     
     # Add significance stars only for significant results
     for i, (_, row) in enumerate(strong_effects.iterrows()):
-        if row['Significant']:
-            stars = '***' if row['p_fdr'] < 0.001 else '**' if row['p_fdr'] < 0.01 else '*'
+        if row[significant_col]:
+            stars = '***' if row[p_fdr_col] < 0.001 else '**' if row[p_fdr_col] < 0.01 else '*'
             ax.text(row['Cramers_V'] + 0.01, i, stars, va='center', fontsize=10, fontweight='bold')
     
     ax.set_yticks(y_pos)
@@ -532,7 +537,7 @@ def plot_binary_predictor_effects(results_df, title, output_path,
 
 def plot_binary_predictor_prevalence(results_df, label_pred, label_not_pred, 
                                       title, output_path, top_n=15,
-                                      figsize=(12, 9)):
+                                      figsize=(12, 9), significant_col='Significant'):
     """
     Plot prevalence comparison for binary predictor (grouped horizontal bars).
     
@@ -544,8 +549,9 @@ def plot_binary_predictor_prevalence(results_df, label_pred, label_not_pred,
         output_path: Where to save figure
         top_n: Number of top associations to show
         figsize: Figure dimensions
+        significant_col: Name of the Significant column (default: 'Significant')
     """
-    significant = results_df[results_df['Significant']].copy()
+    significant = results_df[results_df[significant_col]].copy()
     
     if len(significant) == 0:
         print("No significant associations to visualize.")
@@ -582,7 +588,8 @@ def plot_binary_predictor_prevalence(results_df, label_pred, label_not_pred,
 
 
 def plot_top_associations_barplot(results_df, title, output_path, 
-                                    min_effect=0.1, figsize=(12, 9), footnote=None):
+                                    min_effect=0.1, figsize=(12, 9), footnote=None,
+                                    p_fdr_col='p_fdr', p_value_col='p_value'):
     """
     Plot ranked bar plot of top associations.
     
@@ -593,15 +600,17 @@ def plot_top_associations_barplot(results_df, title, output_path,
         min_effect: Minimum Cramér's V to include
         figsize: Figure dimensions
         footnote: Optional footnote text
+        p_fdr_col: Name of the p_fdr column (default: 'p_fdr')
+        p_value_col: Name of the p_value column (default: 'p_value')
     """
     # Filter for strong effects
     strong_effects = results_df[results_df['Cramers_V'] >= min_effect].copy()
     
     # Filter out results with very weak raw p-values (p > 0.10)
     # This keeps "suggestive" results but removes pure noise
-    strong_effects = strong_effects[strong_effects['p_value'] < 0.10]
+    strong_effects = strong_effects[strong_effects[p_value_col] < 0.10]
     
-    strong_effects = strong_effects.sort_values('p_value')
+    strong_effects = strong_effects.sort_values(p_value_col)
     
     if len(strong_effects) == 0:
         print(f"No associations with V >= {min_effect} found.")
@@ -669,7 +678,7 @@ def plot_top_associations_barplot(results_df, title, output_path,
     # Use raw p-value for bar length instead of FDR q-value
     # This prevents the "staircase" effect where many items have identical q=1.0
     # We still use FDR for significance testing/stars
-    bar_lengths = -np.log10(strong_effects['p_value'])
+    bar_lengths = -np.log10(strong_effects[p_value_col])
     
     ax.barh(y_pos, bar_lengths, 
             color=colors, edgecolor='black', linewidth=0.5)
@@ -679,9 +688,9 @@ def plot_top_associations_barplot(results_df, title, output_path,
         diff_text = f"{row['Difference']:+.1f}%"
         # Add stars if FDR significant
         stars = ""
-        if row['p_fdr'] < 0.001: stars = "***"
-        elif row['p_fdr'] < 0.01: stars = "**"
-        elif row['p_fdr'] < 0.05: stars = "*"
+        if row[p_fdr_col] < 0.001: stars = "***"
+        elif row[p_fdr_col] < 0.01: stars = "**"
+        elif row[p_fdr_col] < 0.05: stars = "*"
         
         # Position text
         text_pos = bar_lengths.iloc[i] + 0.1
@@ -729,7 +738,8 @@ def plot_top_associations_barplot(results_df, title, output_path,
     plt.close()
 
 
-def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(12, 12)):
+def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(12, 12),
+                            significant_col='Significant', p_value_col='p_value'):
     """
     Render a summary table of statistical results as an image.
     Includes overall stats and a table of top associations (significant or suggestive).
@@ -740,6 +750,8 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
         output_path: Where to save the PNG
         top_n: Number of top associations to list
         figsize: Figure dimensions
+        significant_col: Name of the Significant column (default: 'Significant')
+        p_value_col: Name of the p_value column (default: 'p_value')
     """
     fig, ax = plt.subplots(figsize=figsize)
     ax.axis('off')
@@ -750,8 +762,8 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
     
     # 2. Overall Statistics
     n_total = len(results_df)
-    n_sig_unc = (results_df['p_value'] < 0.05).sum()
-    n_sig_fdr = results_df['Significant'].sum()
+    n_sig_unc = (results_df[p_value_col] < 0.05).sum()
+    n_sig_fdr = results_df[significant_col].sum()
     max_v = results_df['Cramers_V'].max()
     
     stats_text = (
@@ -767,7 +779,7 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
     
     # 3. Top Associations Table
     # Determine if we show significant or just top suggestive
-    sig_df = results_df[results_df['Significant']].sort_values('Cramers_V', ascending=False)
+    sig_df = results_df[results_df[significant_col]].sort_values('Cramers_V', ascending=False)
     
     if len(sig_df) > 0:
         table_title = f"Top {top_n} Significant Associations (by Effect Size)"
@@ -775,7 +787,7 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
         footer_note = "Showing statistically significant results (FDR q < 0.05)."
     else:
         table_title = f"Top {top_n} Suggestive Associations (by p-value) - NOT SIGNIFICANT"
-        display_df = results_df.sort_values('p_value', ascending=True).head(top_n)
+        display_df = results_df.sort_values(p_value_col, ascending=True).head(top_n)
         footer_note = "No significant results found. Showing top associations by raw p-value for exploration."
     
     ax.text(0.1, 0.65, table_title, fontsize=14, fontweight='bold')
@@ -797,7 +809,7 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
                 outcome,
                 predictor,
                 f"{row['Chi2']:.1f}",
-                f"{row['p_value']:.3f}",
+                f"{row[p_value_col]:.3f}",
                 f"{row['Cramers_V']:.2f}",
                 f"{row['Difference']:+.1f}%"
             ])

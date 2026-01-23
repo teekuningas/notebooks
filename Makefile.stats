@@ -43,3 +43,18 @@ pdf-interview-report:
 		--pdf-engine=pdflatex
 
 .PHONY: pdf-esa-koodit pdf-bird-groups-koodit pdf-bird-presence-koodit pdf-bird-groups-koodit pdf-all run-esa-koodit run-bird-groups-koodit run-bird-presence-koodit run-bird-groups-koodit run-all pdf-methodology run-methodology run-interview-analysis pdf-interview-report
+
+
+# Comparison analysis targets
+run-comparison-analysis:
+	bash run_comparison_analysis.sh
+
+run-comparison-plots:
+	MPLBACKEND=Agg python3 nb_create_comparison_plots.py
+
+pdf-comparison:
+	nix shell nixpkgs/25.05#imagemagick --command ./scripts/create_pdf.sh "output/stats_comparison.pdf" "452 vs 710 Comparison" "output/stats_comparison" 50
+
+comparison-all: run-comparison-analysis run-comparison-plots pdf-comparison
+
+.PHONY: run-comparison-analysis run-comparison-plots pdf-comparison comparison-all
