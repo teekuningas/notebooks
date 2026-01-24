@@ -805,7 +805,7 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
                             stats_mode='chisquared'):
     """
     Render a summary table of statistical results as an image.
-    Includes overall stats and a table of top associations (significant or suggestive).
+    Includes overall stats and a table of top significant associations.
     
     Args:
         results_df: DataFrame from run_chi_square_tests() or run_mixed_effects_tests()
@@ -848,7 +848,6 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
     ax.text(0.1, 0.82, stats_text, fontsize=12, va='top', linespacing=1.6, family='monospace')
     
     # 3. Top Associations Table
-    # Determine if we show significant or just top suggestive
     sig_df = results_df[results_df['Significant']].copy()
     
     if stats_mode == 'chisquared':
@@ -864,9 +863,12 @@ def save_summary_table_image(results_df, title, output_path, top_n=20, figsize=(
         display_df = sig_df.sort_values(sort_col, ascending=False).head(top_n)
         footer_note = "Showing statistically significant results (FDR q < 0.05)."
     else:
-        table_title = f"Top {top_n} Suggestive Associations (by p-value) - NOT SIGNIFICANT"
-        display_df = results_df.sort_values('p_value', ascending=True).head(top_n)
-        footer_note = "No significant results found. Showing top associations by raw p-value for exploration."
+        # No significant results - don't show a table
+        ax.text(0.5, 0.5, "No significant associations found (FDR q < 0.05)", 
+                ha='center', va='center', fontsize=16, style='italic', color='#666666')
+        plt.savefig(output_path, dpi=300)
+        plt.close()
+        return
     
     ax.text(0.1, 0.65, table_title, fontsize=14, fontweight='bold')
     

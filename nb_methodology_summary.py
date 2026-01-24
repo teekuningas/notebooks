@@ -3,6 +3,11 @@ import glob
 import pandas as pd
 import re
 
+# Statistical mode configuration
+STATS_MODE = os.environ.get('STATS_MODE', 'random_effects')  # Default: random_effects
+if STATS_MODE not in ['random_effects', 'chisquared']:
+    raise ValueError(f"Invalid STATS_MODE: {STATS_MODE}. Must be 'random_effects' or 'chisquared'")
+
 def find_latest_dir(base_path):
     dirs = [d for d in glob.glob(os.path.join(base_path, "*")) if os.path.isdir(d)]
     if not dirs:
@@ -160,7 +165,7 @@ def generate_report():
         artifacts_removed = raw_stats['n_kept_unique'] - cons_stats['initial_themes']
 
     # 2. Analysis Stats
-    csv_path = "output/analyysi_koodit/88d43208/themes_98x452.csv"
+    csv_path = "output/analyysi_koodit/7176421e/themes_98x710.csv"
     analysis_stats = analyze_presence_csv(csv_path)
 
     # Format lists with capitalization
@@ -171,6 +176,34 @@ def generate_report():
     top_10_rows = ""
     for t in raw_stats['top_10']:
         top_10_rows += f"| {t['name']} | {t['count']} |\n"
+
+    # Formulate statistical method based on STATS_MODE
+    if STATS_MODE == 'chisquared':
+        stats_method = """### Statistical method
+
+The analysis uses chi-squared tests with Cramér's V as the effect size measure. This provides a descriptive association between predictors and themes without accounting for user-level clustering:
+
+- Effect sizes calculated using Cramér's V (range: 0-1)  
+- P-values from chi-squared tests  
+- Multiple comparison correction using False Discovery Rate (FDR, Benjamini-Hochberg method)
+
+This approach is suitable for exploratory analysis and provides interpretable effect sizes, though it does not account for multiple interviews from the same user."""
+    else:  # random_effects
+        stats_method = """### Statistical method
+
+The analysis uses mixed-effects logistic regression (R package lme4::glmer) with random user intercepts to account for multiple interviews from the same user:
+
+```
+glmer(theme ~ predictor + (1|user), family=binomial)
+```
+
+This approach:
+
+- Controls for user-level confounding (some users contributed multiple interviews)  
+- Accounts for within-user correlation  
+- Provides valid inference even with unbalanced user contributions  
+- Effect sizes reported as log-odds coefficients (directional)  
+- P-values corrected for multiple comparisons using False Discovery Rate (FDR, Benjamini-Hochberg method)"""
 
     # 3. Generate Markdown
     report = f"""# Themes
@@ -225,19 +258,7 @@ For the statistical analysis, we filtered the themes to include only those with 
 
 {formatted_valid_themes}
 
-### Statistical method
-The analysis uses mixed-effects logistic regression (R package lme4::glmer) with random user intercepts to account for multiple interviews from the same user:
-
-```
-glmer(theme ~ predictor + (1|user), family=binomial)
-```
-
-This approach:
-- Controls for user-level confounding (some users contributed multiple interviews)
-- Accounts for within-user correlation
-- Provides valid inference even with unbalanced user contributions
-
-Effect sizes are calculated using Chi-Square tests and Cramér's V (descriptive statistics). P-values from the mixed-effects models are corrected for multiple comparisons using False Discovery Rate (FDR, Benjamini-Hochberg method).
+{stats_method}
 """
 
     output_file = "output/METHODOLOGY_SUMMARY.md"

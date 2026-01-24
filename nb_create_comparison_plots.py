@@ -128,11 +128,11 @@ def create_comparison_plot(analysis_name, analysis_title, output_path):
     bar_710 = -np.log10(df['p_val_710'].clip(lower=1e-300))
     
     # Plot bars (452 on top, 710 on bottom)
-    # Use neutral colors: steel blue and orange
+    # Use light purple (old/past) and light green (new/fresh)
     bars_452 = ax.barh(y_pos + bar_height/2, bar_452, bar_height,
-                       label='452 interviews', color='#4682B4', edgecolor='black', linewidth=0.5)
+                       label='452 interviews', color='#B19CD9', edgecolor='black', linewidth=0.5)
     bars_710 = ax.barh(y_pos - bar_height/2, bar_710, bar_height,
-                       label='710 interviews', color='#FF8C00', edgecolor='black', linewidth=0.5)
+                       label='710 interviews', color='#90EE90', edgecolor='black', linewidth=0.5)
     
     # Add significance markers at the end of bars
     for idx, row in df.iterrows():
