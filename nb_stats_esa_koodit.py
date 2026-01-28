@@ -86,7 +86,7 @@ if PREVALENCE_FILTER_DATASET:
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-esa_raw = pd.read_csv('./inputs/bird-metadata-refined/esa_habitat_presence_en.csv')
+esa_raw = pd.read_csv('./inputs/bird-metadata-refined/habitat_esa_english.csv')
 esa_raw = esa_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
 themes_raw = pd.read_csv(THEMES_FILE, index_col=0)

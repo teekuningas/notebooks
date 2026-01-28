@@ -1,28 +1,28 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i python3 -p python3 python3Packages.rasterio python3Packages.numpy
 """
-Create ESA WorldCover habitat presence matrices (all-in-one script).
+Create ESA WorldCover habitat presence matrices.
 
-This script:
-1. Loads recording locations from bird metadata
-2. Generates 9-point circular sampling grid (100m radius, 200m diameter)
-3. Extracts land cover from ESA WorldCover raster data (10m resolution, 11 classes)
-4. Creates three CSV files with habitat presence (0/1) per recording:
-   - esa_habitat_presence_original.csv (original WorldCover class names)
-   - esa_habitat_presence_en.csv (simplified English)
-   - esa_habitat_presence_fi.csv (simplified Finnish)
+Generates presence/absence matrices for land cover types around recording
+locations using ESA WorldCover data (10m resolution, 11 classes).
 
-Output: inputs/bird-metadata-refined/esa_habitat_presence_*.csv
+Method:
+1. Load target recording IDs and coordinates
+2. Generate 9-point circular sampling grid (100m radius) per recording
+3. Extract land cover types from ESA WorldCover raster tiles
+4. Create presence matrices with habitat types as columns
 
-Runtime: ~30 seconds
+Habitat types are sorted alphabetically by internal key (consistent order
+across both language outputs). Column headers use display names.
+
+Outputs: habitat_esa_english.csv, habitat_esa_finnish.csv
 """
 
 import csv
 from pathlib import Path
-from collections import Counter
 import math
 
-# ESA WorldCover classes (11 classes)
+# ESA WorldCover class codes (11 classes)
 ESA_CLASSES = {
     10: "Tree cover",
     20: "Shrubland",
@@ -37,46 +37,80 @@ ESA_CLASSES = {
     100: "Moss and lichen"
 }
 
-# Simplified habitat labels mapping
-HABITAT_LABELS = {
-    "Tree cover": ("forest", "metsä"),
-    "Shrubland": ("shrubland", "pensaikko"),
-    "Grassland": ("grassland", "niitty"),
-    "Cropland": ("cropland", "pelto"),
-    "Built-up": ("urban", "kaupunki"),
-    "Bare / sparse vegetation": ("bare", "paljas_maa"),
-    "Snow and ice": ("snow_ice", "lumi_jää"),
-    "Permanent water bodies": ("water", "vesialue"),
-    "Herbaceous wetland": ("wetland", "kosteikko"),
-    "Mangroves": ("mangroves", "mangrovemetsä"),
-    "Moss and lichen": ("moss_lichen", "jäkälä_sammal"),
+# Language-independent habitat keys (sorted alphabetically)
+HABITAT_ORDER = [
+    'bare',
+    'cropland',
+    'forest',
+    'grassland',
+    'mangroves',
+    'moss_lichen',
+    'shrubland',
+    'snow_ice',
+    'urban',
+    'water',
+    'wetland'
+]
+
+# Display names for outputs
+DISPLAY_NAMES_ENGLISH = {
+    'bare': 'Bare / sparse vegetation',
+    'cropland': 'Cropland',
+    'forest': 'Forest',
+    'grassland': 'Grassland',
+    'mangroves': 'Mangroves',
+    'moss_lichen': 'Moss and lichen',
+    'shrubland': 'Shrubland',
+    'snow_ice': 'Snow and ice',
+    'urban': 'Built-up',
+    'water': 'Permanent water bodies',
+    'wetland': 'Herbaceous wetland'
+}
+
+DISPLAY_NAMES_FINNISH = {
+    'bare': 'Paljas maa',
+    'cropland': 'Pelto',
+    'forest': 'Metsä',
+    'grassland': 'Niitty',
+    'mangroves': 'Mangrovemetsä',
+    'moss_lichen': 'Jäkälä ja sammal',
+    'shrubland': 'Pensaikko',
+    'snow_ice': 'Lumi ja jää',
+    'urban': 'Kaupunki',
+    'water': 'Vesialue',
+    'wetland': 'Kosteikko'
+}
+
+# Mapping from ESA class names to internal keys
+ESA_TO_KEY = {
+    "Tree cover": 'forest',
+    "Shrubland": 'shrubland',
+    "Grassland": 'grassland',
+    "Cropland": 'cropland',
+    "Built-up": 'urban',
+    "Bare / sparse vegetation": 'bare',
+    "Snow and ice": 'snow_ice',
+    "Permanent water bodies": 'water',
+    "Herbaceous wetland": 'wetland',
+    "Mangroves": 'mangroves',
+    "Moss and lichen": 'moss_lichen'
 }
 
 
-def get_simplified_labels(original_type):
-    """Get simplified English and Finnish labels for an ESA type."""
-    if original_type in HABITAT_LABELS:
-        return HABITAT_LABELS[original_type]
-    # Fallback: create safe names from original
-    safe_en = original_type.lower().replace(' ', '_').replace('/', '_')
-    safe_fi = safe_en  # Use English as fallback
-    return (safe_en, safe_fi)
-
-
 def load_recording_locations():
-    """Load recording locations from bird metadata."""
-    # Load recording IDs from analysis dataset
+    """Load recording locations from target dataset."""
+    # Load recording IDs
     input_path = 'output/analyysi_koodit/7176421e/themes_98x710.csv'
     rec_ids = set()
     with open(input_path, 'r') as f:
         reader = csv.reader(f)
-        header = next(reader)
+        next(reader)
         for row in reader:
             if row:
                 rec_ids.add(row[0])
-    
-    # Load coordinates from metadata
-    centers = {}  # rec_id -> (lon, lat)
+
+    # Load coordinates
+    centers = {}
     with open('inputs/bird-metadata/recs_since_June25.csv', 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -88,20 +122,19 @@ def load_recording_locations():
                         centers[row['rec_id']] = (lon, lat)
                 except (ValueError, KeyError):
                     pass
-    
+
     return centers
 
 
 def generate_9point_circle(lon, lat):
     """Generate 9-point circular sampling grid at 100m radius."""
-    # Offsets for 100m radius
     LAT_100M = 100 / 111000  # ~0.0009° for 100m north/south
     LON_100M = 100 / 55000   # ~0.0018° for 100m east/west at ~60°N
-    
+
     # Diagonal offset (100m at 45° angle)
     DIAG_LAT = 100 * math.cos(math.radians(45)) / 111000
     DIAG_LON = 100 * math.sin(math.radians(45)) / 55000
-    
+
     return [
         (lon, lat),                              # Center
         (lon, lat + LAT_100M),                   # N
@@ -116,13 +149,11 @@ def generate_9point_circle(lon, lat):
 
 
 def find_esa_files(data_dir):
-    """Find all ESA WorldCover tile files in the directory."""
+    """Find all ESA WorldCover tile files."""
     patterns = ['*.tif', '*.tiff']
     files = []
-    
     for pattern in patterns:
         files.extend(list(data_dir.glob(pattern)))
-    
     return files
 
 
@@ -130,10 +161,9 @@ def extract_esa_data(esa_files, points):
     """Extract ESA WorldCover land cover types for given points."""
     import rasterio
     from rasterio.sample import sample_gen
-    
+
     results = {}
-    
-    # Try each file to find which tiles contain our points
+
     for esa_file in esa_files:
         try:
             with rasterio.open(esa_file) as src:
@@ -143,19 +173,19 @@ def extract_esa_data(esa_files, points):
                     if (src.bounds.left <= lon <= src.bounds.right and
                         src.bounds.bottom <= lat <= src.bounds.top):
                         points_in_tile.append((lon, lat))
-                
+
                 if not points_in_tile:
                     continue
-                
+
                 # Sample these points
                 for coord, val in zip(points_in_tile, sample_gen(src, points_in_tile)):
                     code = int(val[0])
                     if code in ESA_CLASSES:
                         esa_type = ESA_CLASSES[code]
                         results[coord] = esa_type
-        except:
+        except (ValueError, KeyError):
             pass
-    
+
     return results
 
 
@@ -164,81 +194,80 @@ def main():
     print("ESA WORLDCOVER HABITAT PRESENCE MATRIX GENERATOR")
     print("=" * 70)
     print()
-    
+
     # Step 1: Load recording locations
     print("Step 1: Loading recording locations...")
     centers = load_recording_locations()
     print(f"✓ Loaded {len(centers)} recording locations")
     print()
-    
+
     # Step 2: Find ESA data files
     print("Step 2: Finding ESA WorldCover data files...")
     esa_dir = Path('inputs/esa_worldcover')
-    
+
     if not esa_dir.exists():
         print("✗ ERROR: No ESA WorldCover directory found")
         print("  Expected: inputs/esa_worldcover/")
         return
-    
+
     esa_files = find_esa_files(esa_dir)
-    
+
     if not esa_files:
         print("✗ ERROR: No ESA WorldCover tile files found")
         print("  Expected: .tif or .tiff files in inputs/esa_worldcover/")
         return
-    
+
     print(f"✓ Found {len(esa_files)} tile files")
     print()
-    
-    # Step 3: Generate 9-point circles and extract data
-    print("Step 3: Extracting ESA WorldCover data for 9-point circles...")
+
+    # Step 3: Extract ESA data for 9-point circles
+    print("Step 3: Extracting ESA WorldCover data...")
     print(f"  {len(centers)} recordings × 9 points = {len(centers) * 9} samples")
     print()
-    
-    rec_habitats = {}  # rec_id -> set of ESA types
-    
+
+    rec_habitats = {}
+
     for i, (rec_id, (lon, lat)) in enumerate(centers.items(), 1):
         if i % 50 == 0:
             print(f"  Processing {i}/{len(centers)}...")
-        
+
         # Generate 9-point circle
         points = generate_9point_circle(lon, lat)
-        
+
         # Extract ESA data
         esa_data = extract_esa_data(esa_files, points)
-        
-        # Collect unique types
-        types_present = set(esa_data.values())
-        
-        rec_habitats[rec_id] = types_present
-    
+
+        # Convert ESA class names to internal keys
+        keys_present = set()
+        for esa_type in esa_data.values():
+            if esa_type in ESA_TO_KEY:
+                keys_present.add(ESA_TO_KEY[esa_type])
+
+        rec_habitats[rec_id] = keys_present
+
     print(f"✓ Extracted data for {len(rec_habitats)} recordings")
     print()
-    
-    # Step 4: Find all unique habitat types
-    all_types = set()
-    for types in rec_habitats.values():
-        all_types.update(types)
-    
-    all_types = sorted(all_types)
-    print(f"Found {len(all_types)} unique habitat types")
+
+    # Step 4: Find all unique habitat types (use HABITAT_ORDER for consistency)
+    all_keys_present = set()
+    for keys in rec_habitats.values():
+        all_keys_present.update(keys)
+
+    # Filter HABITAT_ORDER to only include keys that are present
+    habitat_keys = [k for k in HABITAT_ORDER if k in all_keys_present]
+    print(f"Found {len(habitat_keys)} unique habitat types")
     print()
-    
-    # Step 5: Create simplified label mappings
-    all_types_en = [get_simplified_labels(t)[0] for t in all_types]
-    all_types_fi = [get_simplified_labels(t)[1] for t in all_types]
-    
-    # Step 6: Create output directory
+
+    # Step 5: Create output matrices
     output_dir = Path('inputs/bird-metadata-refined')
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    output_original = output_dir / 'esa_habitat_presence_original.csv'
-    output_en = output_dir / 'esa_habitat_presence_en.csv'
-    output_fi = output_dir / 'esa_habitat_presence_fi.csv'
-    
-    print("Step 4: Creating presence/absence matrices (3 versions)...")
+
+    output_english = output_dir / 'habitat_esa_english.csv'
+    output_finnish = output_dir / 'habitat_esa_finnish.csv'
+
+    print("Step 4: Creating habitat presence matrices...")
     print()
-    
+
     # Prepare data rows
     data_rows = []
     for rec_id in sorted(rec_habitats.keys()):
@@ -246,90 +275,71 @@ def main():
             'rec_id': rec_id,
             'lon': centers[rec_id][0],
             'lat': centers[rec_id][1],
-            'types': rec_habitats[rec_id]
+            'keys': rec_habitats[rec_id]
         })
-    
-    # 1. ORIGINAL ESA names
-    with open(output_original, 'w', newline='') as f:
-        fieldnames = ['rec_id', 'lon', 'lat'] + all_types
+
+    # 1. English names
+    with open(output_english, 'w', newline='') as f:
+        fieldnames = ['rec_id', 'lon', 'lat'] + [DISPLAY_NAMES_ENGLISH[k] for k in habitat_keys]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        
+
         for row_data in data_rows:
             row = {
                 'rec_id': row_data['rec_id'],
                 'lon': row_data['lon'],
                 'lat': row_data['lat']
             }
-            for habitat_type in all_types:
-                row[habitat_type] = 1 if habitat_type in row_data['types'] else 0
+            for key in habitat_keys:
+                display_name = DISPLAY_NAMES_ENGLISH[key]
+                row[display_name] = 1 if key in row_data['keys'] else 0
             writer.writerow(row)
-    
-    print(f"✓ Created: {output_original.name}")
-    
-    # 2. ENGLISH simplified
-    with open(output_en, 'w', newline='') as f:
-        fieldnames = ['rec_id', 'lon', 'lat'] + all_types_en
+
+    print(f"✓ Created: {output_english.name}")
+
+    # 2. Finnish names
+    with open(output_finnish, 'w', newline='') as f:
+        fieldnames = ['rec_id', 'lon', 'lat'] + [DISPLAY_NAMES_FINNISH[k] for k in habitat_keys]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        
+
         for row_data in data_rows:
             row = {
                 'rec_id': row_data['rec_id'],
                 'lon': row_data['lon'],
                 'lat': row_data['lat']
             }
-            for i, habitat_type in enumerate(all_types):
-                row[all_types_en[i]] = 1 if habitat_type in row_data['types'] else 0
+            for key in habitat_keys:
+                display_name = DISPLAY_NAMES_FINNISH[key]
+                row[display_name] = 1 if key in row_data['keys'] else 0
             writer.writerow(row)
-    
-    print(f"✓ Created: {output_en.name}")
-    
-    # 3. FINNISH simplified
-    with open(output_fi, 'w', newline='') as f:
-        fieldnames = ['rec_id', 'lon', 'lat'] + all_types_fi
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        
-        for row_data in data_rows:
-            row = {
-                'rec_id': row_data['rec_id'],
-                'lon': row_data['lon'],
-                'lat': row_data['lat']
-            }
-            for i, habitat_type in enumerate(all_types):
-                row[all_types_fi[i]] = 1 if habitat_type in row_data['types'] else 0
-            writer.writerow(row)
-    
-    print(f"✓ Created: {output_fi.name}")
+
+    print(f"✓ Created: {output_finnish.name}")
     print()
-    
-    # Summary
+
+    # Summary statistics
     print("=" * 70)
-    print("✓ ESA WORLDCOVER HABITAT PRESENCE MATRICES COMPLETE")
+    print("✓ MATRICES COMPLETE")
     print("=" * 70)
+    print(f"Dimensions: {len(data_rows)} recordings × {len(habitat_keys)} habitat types")
     print()
-    print("Files created:")
-    print(f"  1. {output_original.name} - Original WorldCover class names")
-    print(f"  2. {output_en.name} - Simplified English")
-    print(f"  3. {output_fi.name} - Simplified Finnish")
+
+    # Count presence for each habitat type
+    print("Most common habitat types:")
+    key_counts = {}
+    for key in habitat_keys:
+        count = sum(1 for row in data_rows if key in row['keys'])
+        key_counts[key] = count
+
+    # Show top 5
+    sorted_keys = sorted(key_counts.items(), key=lambda x: x[1], reverse=True)
+    for key, count in sorted_keys[:5]:
+        name_en = DISPLAY_NAMES_ENGLISH[key]
+        name_fi = DISPLAY_NAMES_FINNISH[key]
+        pct = count / len(data_rows) * 100
+        print(f"  {name_en:30s} ({name_fi:20s}): {count:3d} ({pct:5.1f}%)")
+
     print()
-    print(f"Dimensions: {len(data_rows)} recordings × {len(all_types)} habitat types")
-    print()
-    print("Top 5 habitat types:")
-    type_counts = {}
-    for types in rec_habitats.values():
-        for t in types:
-            type_counts[t] = type_counts.get(t, 0) + 1
-    
-    for habitat_type, count in sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-        pct = count / len(rec_habitats) * 100
-        en_label = get_simplified_labels(habitat_type)[0]
-        fi_label = get_simplified_labels(habitat_type)[1]
-        print(f"  {en_label:15s} ({fi_label:15s}): {count:3} ({pct:5.1f}%)")
-    
-    print()
-    print(f"All files in: {output_dir}/")
 
 
 if __name__ == '__main__':

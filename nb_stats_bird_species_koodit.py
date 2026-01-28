@@ -90,7 +90,7 @@ if PREVALENCE_FILTER_DATASET:
 
 # %%
 # Load all bird species data (90% confidence threshold)
-birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_species_confident_finnish.csv')
+birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_species_finnish.csv')
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
 # Filter to top N species by prevalence
