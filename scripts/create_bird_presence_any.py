@@ -1,41 +1,36 @@
 #!/usr/bin/env python3
 """
-Create binary bird presence matrix (any bird vs no bird) at a configurable confidence threshold.
+Create binary bird presence matrix.
 
-This script:
-1. Loads target recording IDs from themes analysis
-2. Filters bird observations with prediction >= THRESHOLD
-3. Creates binary presence column: any_bird (1 if any species detected, 0 otherwise)
+Generates a simple presence/absence indicator for whether any bird species
+was detected in each recording, using a low confidence threshold to ensure
+the "no bird" category is truly empty of bird sounds.
 
-Output: inputs/bird-metadata-refined/bird_presence_any.csv
-Columns: rec_id, lon, lat, any_bird
+Method:
+1. Load target recording IDs and coordinates
+2. Check for any bird detection >= threshold confidence
+3. Generate binary presence matrix (0 = no birds, 1 = any bird detected)
 
-Threshold rationale:
-- Lower threshold (e.g., 10%) ensures "no bird" group is truly empty of bird sounds
-- Higher threshold (e.g., 50%) ensures "bird present" group definitely has birds
+Default threshold: 10% confidence ensures sensitive detection.
+
+Output: bird_presence_any.csv
 """
 
 import csv
 from pathlib import Path
-from collections import defaultdict
 
-# CONFIGURATION
-# ---------------------------------------------------------------------------
-# Confidence threshold for "any bird" detection (0.0 - 1.0)
-# 0.1 = 10% confidence. If any species is detected with >= 10% confidence,
-# the recording is marked as having a bird.
+# Detection threshold (0.0 - 1.0)
 THRESHOLD = 0.1
-# ---------------------------------------------------------------------------
 
 
 def load_target_recordings():
-    """Load target recording IDs from the themes analysis."""
+    """Load target recording IDs from themes file."""
     rec_ids = []
     input_path = 'output/analyysi_koodit/7176421e/themes_98x710.csv'
-    
+
     with open(input_path, 'r') as f:
         reader = csv.reader(f)
-        next(reader)  # skip header
+        next(reader)
         for row in reader:
             if row:
                 rec_ids.append(row[0])
@@ -61,26 +56,25 @@ def load_recording_metadata(target_rec_ids):
 
 
 def detect_any_bird(target_rec_ids, threshold):
-    """
-    Detect if any bird was present in each recording.
-    
+    """Detect if any bird species was present in each recording.
+
     Returns:
-        dict: rec_id -> bool (True if any bird detected above threshold)
+        dict: rec_id -> bool (True if any bird detected)
     """
     bird_presence = {}
-    
+
     print(f"Detecting bird presence (threshold >= {threshold})...")
-    
+
     with open('inputs/bird-metadata/species_ids_since_June25.csv', 'r') as f:
         reader = csv.DictReader(f)
         total_lines = 0
         detections = 0
-        
+
         for row in reader:
             total_lines += 1
             if total_lines % 1000000 == 0:
                 print(f"  Processed {total_lines // 1000000}M lines...")
-            
+
             rec_id = row['rec_id']
             if rec_id in target_rec_ids:
                 try:
@@ -90,83 +84,79 @@ def detect_any_bird(target_rec_ids, threshold):
                         detections += 1
                 except (ValueError, KeyError):
                     pass
-    
+
     print(f"✓ Processed {total_lines:,} lines")
-    print(f"✓ Found {detections:,} bird detections above threshold")
+    print(f"✓ Found {detections:,} detections")
     print()
-    
+
     return bird_presence
 
 
 def main():
     print("=" * 70)
-    print("BIRD PRESENCE (ANY vs NONE) GENERATOR")
+    print("BINARY BIRD PRESENCE GENERATOR")
     print("=" * 70)
     print()
     print(f"Threshold: ≥{THRESHOLD*100:.0f}% confidence")
-    print("Purpose: Perceptual analysis (was any bird detected?)")
     print()
-    
+
     # Step 1: Load target recordings
     print("Step 1: Loading target recordings...")
     target_rec_ids = load_target_recordings()
     target_rec_ids_set = set(target_rec_ids)
     print(f"✓ Loaded {len(target_rec_ids)} target recordings")
     print()
-    
+
     # Step 2: Load recording metadata
     print("Step 2: Loading recording metadata...")
     rec_metadata = load_recording_metadata(target_rec_ids_set)
     print(f"✓ Loaded metadata for {len(rec_metadata)} recordings")
     print()
-    
+
     # Step 3: Detect bird presence
-    print(f"Step 3: Detecting bird presence at {THRESHOLD*100:.0f}% threshold...")
+    print(f"Step 3: Detecting bird presence...")
     bird_presence = detect_any_bird(target_rec_ids_set, threshold=THRESHOLD)
-    print(f"✓ Detected birds in {len(bird_presence)} recordings")
+    print(f"✓ Birds detected in {len(bird_presence)} recordings")
     print()
-    
+
     # Step 4: Create output
     output_dir = Path('inputs/bird-metadata-refined')
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / 'bird_presence_any.csv'
-    
-    print("Step 4: Creating binary presence file...")
-    
+
+    print("Step 4: Creating binary presence matrix...")
+
     with open(output_file, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['rec_id', 'lon', 'lat', 'any_bird'])
         writer.writeheader()
-        
+
         for rec_id in target_rec_ids:
             lon = rec_metadata.get(rec_id, {}).get('lon', '')
             lat = rec_metadata.get(rec_id, {}).get('lat', '')
             any_bird = 1 if rec_id in bird_presence else 0
-            
+
             writer.writerow({
                 'rec_id': rec_id,
                 'lon': lon,
                 'lat': lat,
                 'any_bird': any_bird
             })
-    
+
     print(f"✓ Created: {output_file.name}")
     print()
-    
+
     # Summary statistics
     n_with_birds = len(bird_presence)
     n_without_birds = len(target_rec_ids) - n_with_birds
-    
+
     print("=" * 70)
-    print("✓ BIRD PRESENCE FILE COMPLETE")
+    print("✓ MATRIX COMPLETE")
     print("=" * 70)
+    print(f"Dimensions: {len(target_rec_ids)} recordings × 1 variable")
     print()
-    print(f"File: {output_file}")
-    print(f"Dimensions: {len(target_rec_ids)} interviews × 1 binary variable")
+    print(f"Birds present: {n_with_birds:3d} ({n_with_birds/len(target_rec_ids)*100:.1f}%)")
+    print(f"No birds:      {n_without_birds:3d} ({n_without_birds/len(target_rec_ids)*100:.1f}%)")
     print()
-    print(f"With birds:    {n_with_birds:3d} ({n_with_birds/len(target_rec_ids)*100:.1f}%)")
-    print(f"Without birds: {n_without_birds:3d} ({n_without_birds/len(target_rec_ids)*100:.1f}%)")
-    print()
-    print(f"✓ Ready for statistical analysis (nb_stats_bird_presence_koodit.py)")
 
 
 if __name__ == '__main__':
