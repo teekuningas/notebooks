@@ -13,6 +13,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import os
@@ -23,6 +24,12 @@ from utils_interview import (
     load_interviews_from_listing,
     compute_user_habitat_profiles
 )
+
+# Match plotting style from statistical analysis scripts
+sns.set_style("whitegrid")
+plt.rcParams['figure.dpi'] = 150
+plt.rcParams['font.size'] = 11
+plt.rcParams['axes.unicode_minus'] = False
 
 # Configuration
 DATE_START_FEATURE = '2025-06-11'
@@ -192,10 +199,10 @@ def generate_descriptive_stats(df_full, df_interviews):
     # Plot Histogram
     max_interviews = int(interviewers.max())
     plt.figure(figsize=(10, 6))
-    plt.hist(interviewers, bins=range(1, max_interviews + 2), align='left', rwidth=0.8, color='skyblue', edgecolor='black')
-    plt.title('Distribution of Interviews per User')
-    plt.xlabel('Number of Interviews')
-    plt.ylabel('Count of Users')
+    plt.hist(interviewers, bins=range(1, max_interviews + 2), align='left', rwidth=0.8, color='#90EE90', edgecolor='black')
+    plt.title('Distribution of Interviews per User', fontsize=13, fontweight='bold', pad=15)
+    plt.xlabel('Number of Interviews', fontsize=12)
+    plt.ylabel('Count of Users', fontsize=12)
     plt.yscale('log')
     plt.grid(axis='y', alpha=0.3)
     plt.savefig(os.path.join(OUTPUT_DIR, 'dist_interviews_per_user.png'))
@@ -236,29 +243,29 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
 
     # 1. days_since_launch
     ax = axes[0, 0]
-    ax.hist(df_event['days_since_launch'], bins=50, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Days Since Launch')
-    ax.set_ylabel('Count')
-    ax.set_title('Days Since Launch\n(days_since_launch)')
+    ax.hist(df_event['days_since_launch'], bins=50, color='#90EE90', edgecolor='black')
+    ax.set_xlabel('Days Since Launch', fontsize=11)
+    ax.set_ylabel('Count', fontsize=11)
+    ax.set_title('Days Since Launch\n(days_since_launch)', fontsize=11, fontweight='bold')
     ax.grid(axis='y', alpha=0.3)
 
     # 2. has_species
     ax = axes[0, 1]
     has_species_counts = df_event['has_species'].value_counts().sort_index()
     ax.bar(has_species_counts.index, has_species_counts.values, color=['#B19CD9', '#90EE90'], edgecolor='black')
-    ax.set_xlabel('Has Species Recognized')
-    ax.set_ylabel('Count')
-    ax.set_title('Species Recognition\n(has_species)')
+    ax.set_xlabel('Has Species Recognized', fontsize=11)
+    ax.set_ylabel('Count', fontsize=11)
+    ax.set_title('Species Recognition\n(has_species)', fontsize=11, fontweight='bold')
     ax.set_xticks([0, 1])
     ax.set_xticklabels(['No', 'Yes'])
     ax.grid(axis='y', alpha=0.3)
 
     # 3. recs_since_launch
     ax = axes[1, 0]
-    ax.hist(df_event['recs_since_launch'], bins=100, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Recording Number (Since Launch)')
-    ax.set_ylabel('Count')
-    ax.set_title('User Recording Rank\n(recs_since_launch, log-transformed in model)')
+    ax.hist(df_event['recs_since_launch'], bins=100, color='#90EE90', edgecolor='black')
+    ax.set_xlabel('Recording Number (Since Launch)', fontsize=11)
+    ax.set_ylabel('Count', fontsize=11)
+    ax.set_title('User Recording Rank\n(recs_since_launch, log-transformed in model)', fontsize=11, fontweight='bold')
     ax.set_yscale('log')  # Highly skewed distribution - log y-axis to see full range
     ax.grid(axis='y', alpha=0.3)
 
@@ -266,19 +273,19 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
     ax = axes[1, 1]
     max_interviews = int(df_event['interviews_since_launch'].max())
     ax.hist(df_event['interviews_since_launch'], bins=range(0, max_interviews + 2), 
-            color='skyblue', edgecolor='black', align='left')
-    ax.set_xlabel('Interviews Since Launch')
-    ax.set_ylabel('Count')
-    ax.set_title('User Interview Experience\n(interviews_since_launch)')
+            color='#90EE90', edgecolor='black', align='left')
+    ax.set_xlabel('Interviews Since Launch', fontsize=11)
+    ax.set_ylabel('Count', fontsize=11)
+    ax.set_title('User Interview Experience\n(interviews_since_launch)', fontsize=11, fontweight='bold')
     ax.set_yscale('log')  # Extremely zero-inflated - log y-axis to see non-zero cases
     ax.grid(axis='y', alpha=0.3)
 
     # 5. hour
     ax = axes[2, 0]
-    ax.hist(df_event['hour'], bins=24, color='skyblue', edgecolor='black', range=(0, 24))
-    ax.set_xlabel('Hour of Day (UTC)')
-    ax.set_ylabel('Count')
-    ax.set_title('Recording Time\n(hour)')
+    ax.hist(df_event['hour'], bins=24, color='#90EE90', edgecolor='black', range=(0, 24))
+    ax.set_xlabel('Hour of Day (UTC)', fontsize=11)
+    ax.set_ylabel('Count', fontsize=11)
+    ax.set_title('Recording Time\n(hour)', fontsize=11, fontweight='bold')
     ax.grid(axis='y', alpha=0.3)
 
     # 6. Habitat: urban
@@ -286,9 +293,9 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
     if 'urban' in df_event.columns:
         urban_counts = df_event['urban'].value_counts().sort_index()
         ax.bar(urban_counts.index, urban_counts.values, color=['#B19CD9', '#90EE90'], edgecolor='black')
-        ax.set_xlabel('Urban Habitat')
-        ax.set_ylabel('Count')
-        ax.set_title('Urban Habitat Presence\n(urban)')
+        ax.set_xlabel('Urban Habitat', fontsize=11)
+        ax.set_ylabel('Count', fontsize=11)
+        ax.set_title('Urban Habitat Presence\n(urban)', fontsize=11, fontweight='bold')
         ax.set_xticks([0, 1])
         ax.set_xticklabels(['No', 'Yes'])
         ax.grid(axis='y', alpha=0.3)
@@ -337,36 +344,36 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
     
     # 1. total_recordings
     ax = axes[0, 0]
-    ax.hist(user_stats['total_recordings'], bins=100, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Total Recordings')
-    ax.set_ylabel('Count of Users')
-    ax.set_title('User Activity Level\n(total_recordings, log-transformed in model)')
+    ax.hist(user_stats['total_recordings'], bins=100, color='#90EE90', edgecolor='black')
+    ax.set_xlabel('Total Recordings', fontsize=11)
+    ax.set_ylabel('Count of Users', fontsize=11)
+    ax.set_title('User Activity Level\n(total_recordings, log-transformed in model)', fontsize=11, fontweight='bold')
     ax.set_yscale('log')  # Highly skewed (median=4, max=5036) - log y-axis to see full range
     ax.grid(axis='y', alpha=0.3)
     
     # 2. n_discoveries
     ax = axes[0, 1]
-    ax.hist(user_stats['n_discoveries'], bins=50, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Number of Discoveries')
-    ax.set_ylabel('Count of Users')
-    ax.set_title('Species Discovery Count\n(n_discoveries)')
+    ax.hist(user_stats['n_discoveries'], bins=50, color='#90EE90', edgecolor='black')
+    ax.set_xlabel('Number of Discoveries', fontsize=11)
+    ax.set_ylabel('Count of Users', fontsize=11)
+    ax.set_title('Species Discovery Count\n(n_discoveries)', fontsize=11, fontweight='bold')
     ax.set_yscale('log')  # Highly skewed - log y-axis to see tail
     ax.grid(axis='y', alpha=0.3)
     
     # 3. tenure_days
     ax = axes[1, 0]
-    ax.hist(user_stats['tenure_days'], bins=50, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Tenure (Days)')
-    ax.set_ylabel('Count of Users')
-    ax.set_title('User Tenure\n(tenure_days)')
+    ax.hist(user_stats['tenure_days'], bins=50, color='#90EE90', edgecolor='black')
+    ax.set_xlabel('Tenure (Days)', fontsize=11)
+    ax.set_ylabel('Count of Users', fontsize=11)
+    ax.set_title('User Tenure\n(tenure_days)', fontsize=11, fontweight='bold')
     ax.grid(axis='y', alpha=0.3)
     
     # 4. user_urban_ratio
     ax = axes[1, 1]
-    ax.hist(user_stats['user_urban_ratio'], bins=50, color='skyblue', edgecolor='black')
-    ax.set_xlabel('Urban Ratio')
-    ax.set_ylabel('Count of Users')
-    ax.set_title('User Urban Habitat Ratio\n(user_urban_ratio)')
+    ax.hist(user_stats['user_urban_ratio'], bins=50, color='#90EE90', edgecolor='black')
+    ax.set_xlabel('Urban Ratio', fontsize=11)
+    ax.set_ylabel('Count of Users', fontsize=11)
+    ax.set_title('User Urban Habitat Ratio\n(user_urban_ratio)', fontsize=11, fontweight='bold')
     ax.grid(axis='y', alpha=0.3)
     
     plt.tight_layout(rect=[0, 0, 1, 0.99])
@@ -483,11 +490,11 @@ def plot_odds_ratios(results):
             capsize=5, color='#90EE90', edgecolor='black')
     
     ax.set_yticks(y)
-    ax.set_yticklabels(r.index)
+    ax.set_yticklabels(r.index, fontsize=11)
     ax.axvline(x=1, color='#B19CD9', linestyle='--', linewidth=2, alpha=0.7)
-    ax.set_xlabel('Odds Ratio')
+    ax.set_xlabel('Odds Ratio', fontsize=12, fontweight='bold')
     ax.set_xscale('log')
-    ax.set_title('Event-Level Predictors of Interview Participation\n(Logistic Regression with Cluster-Robust SEs)')
+    ax.set_title('Event-Level Predictors of Interview Participation\n(Logistic Regression with Cluster-Robust SEs)', fontsize=13, fontweight='bold', pad=15)
     ax.grid(axis='x', alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, 'odds_ratios.png'))
@@ -823,11 +830,11 @@ def run_user_participation_analysis(df_full, df_interviews, df_species, user_pro
                 capsize=5, color='#90EE90', edgecolor='black')
         
         ax.set_yticks(y)
-        ax.set_yticklabels(r.index)
+        ax.set_yticklabels(r.index, fontsize=11)
         ax.axvline(x=1, color='#B19CD9', linestyle='--', linewidth=2, alpha=0.7)
-        ax.set_xlabel('Odds Ratio')
+        ax.set_xlabel('Odds Ratio', fontsize=12, fontweight='bold')
         ax.set_xscale('log')
-        ax.set_title('User-Level Predictors of Interview Participation (Binary)')
+        ax.set_title('User-Level Predictors of Interview Participation (Binary)', fontsize=13, fontweight='bold', pad=15)
         ax.grid(axis='x', alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(OUTPUT_DIR, 'user_participation_odds_ratios.png'))

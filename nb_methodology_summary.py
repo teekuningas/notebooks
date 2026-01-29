@@ -22,63 +22,63 @@ def parse_merge_log(log_path):
         "total_merges": 0,
         "run_id": "unknown"
     }
-    
+
     if not os.path.exists(log_path):
         return stats
-        
+
     with open(log_path, 'r', encoding='utf-8') as f:
         content = f.read()
-        
+
     # Extract Run ID
     match = re.search(r"Run ID: ([^\n]+)", content)
     if match:
         stats["run_id"] = match.group(1).strip()
-        
+
     # Extract Initial themes
     match = re.search(r"Initial themes: (\d+)", content)
     if match:
         stats["initial_themes"] = int(match.group(1))
-        
+
     # Extract Final themes
     match = re.search(r"Final themes: (\d+)", content)
     if match:
         stats["final_themes"] = int(match.group(1))
-        
+
     # Extract Total merges
     match = re.search(r"Total merges: (\d+)", content)
     if match:
         stats["total_merges"] = int(match.group(1))
-        
+
     return stats
 
 def get_all_themes(list_path):
     themes = []
     if not os.path.exists(list_path):
         return themes
-        
+
     with open(list_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        
+
     for line in lines:
         # Match format: "1. Theme Name (123 codes)"
         match = re.match(r"\d+\.\s+(.+?)\s+\((\d+)\s+codes\)", line.strip())
         if match:
             themes.append(match.group(1))
-            
+
     return themes
 
 def analyze_presence_csv(csv_path):
     if not os.path.exists(csv_path):
         return None
-        
+
     df = pd.read_csv(csv_path, index_col=0)
-    
+
     # Calculate prevalence for each theme (column)
     prevalence = df.mean()
-    
+
     # Filter for 0.2 - 0.8 range
     valid_themes = prevalence[(prevalence >= 0.2) & (prevalence <= 0.8)].index.tolist()
-    
+
     stats = {
         "n_interviews": len(df),
         "n_themes_analyzed": len(df.columns),
@@ -86,7 +86,7 @@ def analyze_presence_csv(csv_path):
         "valid_themes": valid_themes,
         "total_themes": len(prevalence)
     }
-    
+
     return stats
 
 def parse_raw_codes(filepath):
@@ -99,7 +99,7 @@ def parse_raw_codes(filepath):
 
     all_codes = []
     current_rec_id = None
-    
+
     for line in lines:
         line = line.strip()
         if "Rec ID Anonymized:" in line:
@@ -114,7 +114,7 @@ def parse_raw_codes(filepath):
 
     # 1. Total raw codes
     total_raw = len(all_codes)
-    
+
     # 2. Filter singletons (appear in < 2 interviews)
     code_counts = {}
     for item in all_codes:
@@ -122,11 +122,11 @@ def parse_raw_codes(filepath):
         if c not in code_counts:
             code_counts[c] = set()
         code_counts[c].add(item['rec_id'])
-        
+
     # Codes that appear in at least 2 interviews
     kept_codes = [c for c, ids in code_counts.items() if len(ids) >= 2]
     n_kept_unique = len(kept_codes)
-    
+
     # Calculate how many raw entries were removed
     # (This is an approximation since we are counting unique names vs raw entries, 
     # but the user asked for "remove 1255 themes while keeping 1579")
@@ -134,11 +134,11 @@ def parse_raw_codes(filepath):
     kept_raw_entries = [item for item in all_codes if len(code_counts[item['code'].lower().strip()]) >= 2]
     n_kept_raw = len(kept_raw_entries)
     n_removed_raw = total_raw - n_kept_raw
-    
+
     # Get top 10 raw themes
     sorted_codes = sorted(code_counts.items(), key=lambda x: len(x[1]), reverse=True)
     top_10_raw = [{"name": c.capitalize(), "count": len(ids)} for c, ids in sorted_codes[:10]]
-    
+
     return {
         "total_raw": total_raw,
         "n_removed_raw": n_removed_raw,
@@ -153,21 +153,21 @@ def generate_report():
     for i, arg in enumerate(sys.argv):
         if arg == '--output' and i + 1 < len(sys.argv):
             custom_output = sys.argv[i + 1]
-    
+
     # Statistical mode configuration
     stats_mode = os.environ.get('STATS_MODE', 'random_effects')  # Default: random_effects
     if stats_mode not in ['random_effects', 'chisquared']:
         raise ValueError(f"Invalid STATS_MODE: {stats_mode}. Must be 'random_effects' or 'chisquared'")
-    
+
     # 1. Consolidation Stats
     log_path = "output/consolidation/77db8e4e_seed11/merge_log.txt"
     list_path = "output/consolidation/77db8e4e_seed11/final_themes_list.txt"
     raw_codes_path = "output/koodit/487ef9e9/koodit_raw_rec_id_anonymized.txt"
-    
+
     cons_stats = parse_merge_log(log_path)
     all_themes = get_all_themes(list_path)
     raw_stats = parse_raw_codes(raw_codes_path)
-    
+
     # Calculate artifacts removed
     # We know the "Initial themes" for merging (from log)
     # We know "n_kept_unique" from raw parsing
@@ -179,7 +179,7 @@ def generate_report():
     # 2. Analysis Stats - Load both datasets
     csv_path_710 = "output/analyysi_koodit/7176421e/themes_98x710.csv"
     csv_path_452 = "output/analyysi_koodit/88d43208/themes_98x452.csv"
-    
+
     analysis_stats_710 = analyze_presence_csv(csv_path_710)
     analysis_stats_452 = analyze_presence_csv(csv_path_452)
 
@@ -193,14 +193,14 @@ def generate_report():
         theme_translations = [(fi, en) for fi, en in trans_dict.items() if fi[0].isupper()]
         # Sort by Finnish name
         theme_translations.sort(key=lambda x: x[0])
-        
+
         translation_table = "\n## Theme Translations\n\n"
-        translation_table += "**Note**: English translations are provided for readability in international publications. All analysis was performed using the original Finnish theme names.\n\n"
+        translation_table += "**Note**: English translations are provided for readability. All analysis was performed using the original Finnish theme names.\n\n"
         translation_table += "The following table shows all 98 themes with their Finnish and English names:\n\n"
         translation_table += "| Finnish | English |\n"
         translation_table += "| :--- | :--- |\n"
         for fi, en in theme_translations:
-            translation_table += f"| {fi} | {en} |\n"
+            translation_table += f"| {fi.capitalize()} | {en.capitalize()} |\n"
         translation_table += "\n"
     except Exception as e:
         print(f"Note: Could not load translations: {e}")
@@ -208,47 +208,36 @@ def generate_report():
     # Format lists with capitalization (use 710 dataset as primary)
     formatted_all_themes = ", ".join([t.capitalize() for t in all_themes])
     formatted_valid_themes_710 = ", ".join([t.capitalize() for t in analysis_stats_710['valid_themes']])
-    
+
     # Translate filtered themes for display
     formatted_valid_themes_710_en = ""
     if trans_dict:
-        valid_themes_710_en = [trans_dict.get(t.capitalize(), t.capitalize()) for t in analysis_stats_710['valid_themes']]
+        valid_themes_710_en = [trans_dict.get(t.capitalize(), t.capitalize()).capitalize() for t in analysis_stats_710['valid_themes']]
         formatted_valid_themes_710_en = ", ".join(valid_themes_710_en)
-    
+
     # Format top 10 table with translations
     top_10_rows = ""
     for t in raw_stats['top_10']:
         finnish = t['name']
         english = trans_dict.get(finnish, finnish) if trans_dict else finnish
-        top_10_rows += f"| {finnish} | {english} | {t['count']} |\n"
+        top_10_rows += f"| {finnish} | {english.capitalize()} | {t['count']} |\n"
 
-    # Formulate statistical method based on stats_mode
-    if stats_mode == 'chisquared':
-        stats_method = """### Statistical method
+    # Statistical method - always show both methods since both datasets are analyzed
+    stats_method = """### Statistical method
 
-The analysis uses chi-squared tests with Cramér's V as the effect size measure. This provides a descriptive association between predictors and themes without accounting for user-level clustering:
+Two different statistical approaches were used for the two datasets:
 
-- Effect sizes calculated using Cramér's V (range: 0-1)  
-- P-values from chi-squared tests  
-- Multiple comparison correction using False Discovery Rate (FDR, Benjamini-Hochberg method)
-
-This approach is suitable for exploratory analysis and provides interpretable effect sizes, though it does not account for multiple interviews from the same user."""
-    else:  # random_effects
-        stats_method = """### Statistical method
-
-The analysis uses mixed-effects logistic regression (R package lme4::glmer) with random user intercepts to account for multiple interviews from the same user:
+**710 dataset** (multiple interviews per user): Mixed-effects logistic regression with random user intercepts (R package lme4::glmer) to account for repeated measures:
 
 ```
 glmer(theme ~ predictor + (1|user), family=binomial)
 ```
 
-This approach:
+This controls for user-level confounding and within-user correlation.
 
-- Controls for user-level confounding (some users contributed multiple interviews)  
-- Accounts for within-user correlation  
-- Provides valid inference even with unbalanced user contributions  
-- Effect sizes reported as log-odds coefficients (directional)  
-- P-values corrected for multiple comparisons using False Discovery Rate (FDR, Benjamini-Hochberg method)"""
+**452 dataset** (one interview per user): Chi-squared tests with Cramér's V as the effect size measure, providing descriptive associations without user clustering.
+
+Both methods use False Discovery Rate correction (FDR, Benjamini-Hochberg) for multiple comparisons."""
 
     # 3. Generate Markdown
     report = f"""# Themes
@@ -287,9 +276,11 @@ In each iteration:
 
 3. If the local LLM confirmed they were the same concept, they were merged.
 
-The process repeated until 50 consecutive pairs were rejected. This resulted in {cons_stats['final_themes']} consolidated themes (Finnish):
+The process repeated until 50 consecutive pairs were rejected. This resulted in {cons_stats['final_themes']} consolidated themes.
 
-{formatted_all_themes}
+{translation_table}
+
+**Note**: English translations are provided for readability. All analysis was performed using the original Finnish theme names.
 
 ## 4. Re-evaluating themes in interviews
 The consolidated themes were then checked against the original interview texts to determine their presence or absence. The instruction used was:
@@ -307,20 +298,13 @@ Two datasets were created:
 
 For the statistical analysis, we filtered the themes to include only those with a prevalence between 20% and 80%. This ensures sufficient variation for statistical testing.
 
-**Filtering based on 710 dataset**: {len(analysis_stats_710['valid_themes'])} themes met this criterion.
-
-These themes (Finnish names used in analysis):
-
-{formatted_valid_themes_710}
-
-These same themes (English translations for display):
+**Filtering based on 710 dataset**: {len(analysis_stats_710['valid_themes'])} themes met this criterion:
 
 {formatted_valid_themes_710_en}
 
 **Note**: This same filtered theme list was used for both the 452 and 710 dataset analyses to ensure comparability.
 
-{stats_method}
-{translation_table}"""
+{stats_method}"""
 
     # Determine output file path
     if custom_output:
@@ -328,10 +312,10 @@ These same themes (English translations for display):
         output_file = os.path.join(custom_output, "METHODOLOGY_SUMMARY.md")
     else:
         output_file = "output/METHODOLOGY_SUMMARY.md"
-    
+
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(report)
-    
+
     print(f"Report generated: {output_file}")
 
 if __name__ == "__main__":

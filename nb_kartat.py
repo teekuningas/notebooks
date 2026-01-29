@@ -163,7 +163,7 @@ def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename,
              'Proportion: Ratio of interviews within each grid cell where this theme was present.',
              ha='right', va='bottom', fontsize=8, style='italic', color='gray')
 
-    plt.savefig(output_filename, bbox_inches='tight', pad_inches=0.1, dpi=300)
+    plt.savefig(output_filename, bbox_inches='tight', pad_inches=0.1, dpi=600)
     plt.show()
 
 
