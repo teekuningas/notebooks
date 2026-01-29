@@ -54,7 +54,7 @@ HABITAT_ORDER = [
 
 # Display names for outputs
 DISPLAY_NAMES_ENGLISH = {
-    'bare': 'Bare / sparse vegetation',
+    'bare': 'Bare ground',
     'cropland': 'Cropland',
     'forest': 'Forest',
     'grassland': 'Grassland',
@@ -62,9 +62,9 @@ DISPLAY_NAMES_ENGLISH = {
     'moss_lichen': 'Moss and lichen',
     'shrubland': 'Shrubland',
     'snow_ice': 'Snow and ice',
-    'urban': 'Built-up',
-    'water': 'Permanent water bodies',
-    'wetland': 'Herbaceous wetland'
+    'urban': 'Urban',
+    'water': 'Water',
+    'wetland': 'Wetland'
 }
 
 DISPLAY_NAMES_FINNISH = {

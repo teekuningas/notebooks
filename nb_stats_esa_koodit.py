@@ -86,7 +86,13 @@ if PREVALENCE_FILTER_DATASET:
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-esa_raw = pd.read_csv('./inputs/bird-metadata-refined/habitat_esa_english.csv')
+# Use English habitat names if translation enabled, otherwise Finnish
+if os.environ.get('ENABLE_TRANSLATION', '0') == '1':
+    esa_file = './inputs/bird-metadata-refined/habitat_esa_english.csv'
+else:
+    esa_file = './inputs/bird-metadata-refined/habitat_esa_finnish.csv'
+
+esa_raw = pd.read_csv(esa_file)
 esa_raw = esa_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
 themes_raw = pd.read_csv(THEMES_FILE, index_col=0)
@@ -210,9 +216,8 @@ if STATS_MODE == 'random_effects':
     print(results_df[display_cols].head(20).to_string(index=False))
     
     # Configure plotting parameters
-    effect_threshold = 0.5
     heatmap_title = 'Effect of habitat on theme (|log-odds|)'
-    barplot_title = f'Strongest habitat-theme associations (|log-odds| ≥ {effect_threshold})'
+    barplot_title = 'Strongest habitat-theme associations (p ≤ 0.01)'
     heatmap_vmax = 1.5
     
 elif STATS_MODE == 'chisquared':
@@ -233,9 +238,8 @@ elif STATS_MODE == 'chisquared':
     print(results_df[['Outcome', 'Predictor', 'Chi2', 'p_fdr', 'Cramers_V', 'Difference']].head(20).to_string(index=False))
     
     # Configure plotting parameters
-    effect_threshold = 0.1
     heatmap_title = 'Effect of habitat on theme (effect size)'
-    barplot_title = f'Strongest habitat-theme associations (V ≥ {effect_threshold})'
+    barplot_title = 'Strongest habitat-theme associations (p ≤ 0.01)'
     heatmap_vmax = 0.4
 
 # %% ═════════ 4. Heatmap ═════════
@@ -284,7 +288,6 @@ plot_top_associations_barplot(
     results_df,
     title=barplot_title,
     output_path=f'{output_dir}/04_top_associations.png',
-    min_effect=effect_threshold,
     figsize=STANDARD_FIGSIZE,
     footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)",
     stats_mode=STATS_MODE

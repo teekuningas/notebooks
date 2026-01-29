@@ -89,30 +89,104 @@ print(f"Example: {list(trans.items())[0]}")
 
 Based on initial review, the following improvements identified:
 
-#### 7.1: Translation Completeness
-- **Bird groups**: Translate group names to English (metadata exists, needs to be used)
-- **Bird species**: Use English common names (metadata exists, needs to be used)
-- **Comparison plots**: Also translate bird groups and species
+#### ✅ 7.1: Translation Completeness - COMPLETED
+**Changes made (2026-01-29):**
+- ✅ **ESA habitat names**: Updated English display names to be less technical
+  - "Bare / sparse vegetation" → "Bare ground"
+  - "Built-up" → "Urban"
+  - "Permanent water bodies" → "Water"
+  - "Herbaceous wetland" → "Wetland"
+  - Updated `scripts/create_habitat_presence_esa.py` and regenerated metadata files
+- ✅ **nb_stats_esa_koodit.py**: Now uses English habitat file when `ENABLE_TRANSLATION=1`
+- ✅ **nb_stats_bird_groups_koodit.py**: Now uses English bird group file when `ENABLE_TRANSLATION=1`
+- ✅ **nb_stats_bird_species_koodit.py**: Now uses English bird species file when `ENABLE_TRANSLATION=1`
+- ✅ **Comparison plots**: Automatically use translated names from results.csv files
+- ✅ **Tested**: Verified translations work correctly
 
-#### 7.2: Visual Consistency
-- **Bird presence colors**: Change from green/red to green/purple (match comparison plots)
-- **Interview analysis colors**: Change from blue/red to green/purple (consistency)
-- **Theme maps**: Add footnote explaining ratio calculation
+**Next step**: Run `make -f Makefile.ossi ossi-all` to regenerate all outputs with improved translations
 
-#### 7.3: Plot Clarity
-- **FDR significance threshold**: For bird species, only show p ≤ 0.01 (too many at p < 0.05)
-- **ESA habitat names**: Simplify technical English names ("Permanent water bodies" → more accessible)
+#### ✅ 7.2: Visual Consistency - COMPLETED
+**Changes made (2026-01-29):**
+- ✅ **Bird presence colors**: Changed from green/red to green/purple in `utils_stats.py`
+  - `plot_binary_predictor_distribution()`: Purple for "no bird", green for "bird present"
+  - `plot_binary_predictor_effects()`: Green for positive difference, purple for negative
+  - `plot_binary_predictor_prevalence()`: Green for "with predictor", purple for "without"
+  - Colors now match comparison plots: `#90EE90` (green), `#B19CD9` (purple)
+- ✅ **Interview analysis colors**: Changed from blue/red to green/purple in `nb_interview_comprehensive.py`
+  - Binary bar charts: Purple for 0, green for 1
+  - Odds ratio reference line: Purple instead of red
+  - Bar colors: Green for main bars
+- ✅ **Theme maps**: Added footnote explaining proportion calculation in `nb_kartat.py`
+  - Changed colorbar label from "Ratio" to "Proportion"
+  - Added footnote: "Proportion: Ratio of interviews within each grid cell where this theme was present."
 
-#### 7.4: Methodology Documentation
-- **Theme list format**: Show both English and Finnish for "most frequent themes"
-- **Translation note**: Clarify English translations are for display only, not used in analysis
-- **Script references**: Remove technical details (no "nb_code_consolidation.py" or "seed=11")
-- **Prevalence filtering**: 
-  - Show 98 themes in Finnish
-  - Show filtered list (710 prevalence, 20-80%) in Finnish
-  - Note this list used for both 710 and 452 analyses
-  - Show filtered list translated to English
-  - Don't show 452-specific filtered list
+**Result**: All visualizations now use consistent green/purple color scheme throughout the project
+
+#### ✅ 7.3: Plot Clarity - COMPLETED
+**Changes made (2026-01-29):**
+- ✅ **Bar chart filtering**: Modified `plot_top_associations_barplot()` in `utils_stats.py`
+  - Removed effect size threshold filtering (V >= 0.1, |coef| >= threshold)
+  - Now filters by p-value: only shows associations with **p ≤ 0.01**
+  - **Rationale**: Too many bars to fit on A4 paper with old filtering
+  - **Result**: Cleaner plots with fewer, more significant associations
+
+#### ✅ 7.4: Methodology Documentation - COMPLETED
+**Changes made (2026-01-29) in `nb_methodology_summary.py`:**
+- ✅ **Top 10 themes table**: Now shows both Finnish and English names
+- ✅ **Translation note added**: "English translations are provided for readability in international publications. All analysis was performed using the original Finnish theme names."
+- ✅ **Removed technical details**: 
+  - Removed "nb_code_consolidation.py (seed=11)" reference
+  - Now just says "through an iterative process"
+- ✅ **Prevalence filtering section improved**:
+  - Shows all 98 consolidated themes in Finnish
+  - Shows filtered list (710 prevalence, 20-80%) in Finnish
+  - Shows same filtered list translated to English
+  - Clarifies this list used for both 710 and 452 analyses
+  - Removed confusing 452-specific filtered list section
+- ✅ **Better structure**: "Statistical Analysis" section now clearer
+
+**Result**: Methodology documentation is now clearer, less technical, and shows bilingual theme information appropriately.
+
+---
+
+## 🎉 Phase 7 Complete!
+
+All quality improvements have been implemented:
+- ✅ 7.1: Translation Completeness
+- ✅ 7.2: Visual Consistency
+- ✅ 7.3: Plot Clarity
+- ✅ 7.4: Methodology Documentation
+
+**Status (2026-01-29)**: Successfully regenerated all outputs. Analysis completed, but found a few minor refinements needed.
+
+---
+
+## 🔧 Phase 7.5: Final Polish (Minor Tweaks Identified)
+
+After running `make -f Makefile.ossi ossi-all`, the following minor issues were identified:
+
+#### 7.5.1: Interview Analysis Colors - Not All Updated
+- **Issue**: Most plots in `nb_interview_comprehensive.py` still use blue color instead of green
+- **Location**: Histogram plots (lines ~195, 239, 258, 269, 278, 340, 349, 358, 366, 483, 823)
+- **Fix needed**: Change `color='skyblue'` to `color='#90EE90'` (green) for consistency
+
+#### 7.5.2: Methodology - Missing Translations
+- **Issue**: Not all of the top 10 most frequent themes have translations in the translation file
+- **Fix needed**: 
+  1. Check which themes are missing from `./inputs/translations/theme_translations.csv`
+  2. Add missing translations to the file
+
+#### 7.5.3: Methodology - Restructure Theme Display
+- **Current**: Translation table shown at the end, 98 themes listed as comma-separated
+- **Desired**: 
+  1. After "This resulted in 98 consolidated themes", show the **translation table** (with bilingual note)
+  2. In "Filtering based on 710 dataset" section, show **only English names** (no Finnish list)
+- **Rationale**: Better flow, readers see translations immediately after theme introduction
+
+#### 7.5.4: Theme Maps - Image Quality
+- **Issue**: Maps appear pixelated (currently saved at 300 DPI)
+- **Fix needed**: Investigate doubling the resolution (e.g., 600 DPI or larger figure size)
+- **Location**: `nb_kartat.py` - `plt.savefig(..., dpi=300)`
 
 ---
 

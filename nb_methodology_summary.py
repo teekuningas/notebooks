@@ -185,6 +185,7 @@ def generate_report():
 
     # 3. Load theme translations if available
     translation_table = ""
+    trans_dict = {}
     try:
         from utils_translate import load_translation_dict
         trans_dict = load_translation_dict()
@@ -194,6 +195,7 @@ def generate_report():
         theme_translations.sort(key=lambda x: x[0])
         
         translation_table = "\n## Theme Translations\n\n"
+        translation_table += "**Note**: English translations are provided for readability in international publications. All analysis was performed using the original Finnish theme names.\n\n"
         translation_table += "The following table shows all 98 themes with their Finnish and English names:\n\n"
         translation_table += "| Finnish | English |\n"
         translation_table += "| :--- | :--- |\n"
@@ -206,12 +208,19 @@ def generate_report():
     # Format lists with capitalization (use 710 dataset as primary)
     formatted_all_themes = ", ".join([t.capitalize() for t in all_themes])
     formatted_valid_themes_710 = ", ".join([t.capitalize() for t in analysis_stats_710['valid_themes']])
-    formatted_valid_themes_452 = ", ".join([t.capitalize() for t in analysis_stats_452['valid_themes']])
     
-    # Format top 10 table
+    # Translate filtered themes for display
+    formatted_valid_themes_710_en = ""
+    if trans_dict:
+        valid_themes_710_en = [trans_dict.get(t.capitalize(), t.capitalize()) for t in analysis_stats_710['valid_themes']]
+        formatted_valid_themes_710_en = ", ".join(valid_themes_710_en)
+    
+    # Format top 10 table with translations
     top_10_rows = ""
     for t in raw_stats['top_10']:
-        top_10_rows += f"| {t['name']} | {t['count']} |\n"
+        finnish = t['name']
+        english = trans_dict.get(finnish, finnish) if trans_dict else finnish
+        top_10_rows += f"| {finnish} | {english} | {t['count']} |\n"
 
     # Formulate statistical method based on stats_mode
     if stats_mode == 'chisquared':
@@ -253,8 +262,8 @@ This produced a total of {raw_stats['total_raw']} raw codes (approx. {raw_stats[
 
 The most frequent themes in this initial set were:
 
-| Theme | Interviews |
-| :--- | :--- |
+| Finnish | English | Interviews |
+| :--- | :--- | :--- |
 {top_10_rows}
 
 ## 2. Cleaning up
@@ -267,7 +276,7 @@ Before merging, we cleaned the raw data:
 This left {cons_stats['initial_themes']} unique themes for the consolidation phase.
 
 ## 3. Merging similar themes
-The themes were consolidated to remove duplicates and synonyms using `nb_code_consolidation.py` (seed=11). This process was done without reference to the original interview text.
+The themes were consolidated to remove duplicates and synonyms through an iterative process.
 
 In each iteration:
 
@@ -278,7 +287,7 @@ In each iteration:
 
 3. If the local LLM confirmed they were the same concept, they were merged.
 
-The process repeated until 50 consecutive pairs were rejected. This resulted in {cons_stats['final_themes']} consolidated themes:
+The process repeated until 50 consecutive pairs were rejected. This resulted in {cons_stats['final_themes']} consolidated themes (Finnish):
 
 {formatted_all_themes}
 
@@ -294,17 +303,21 @@ Two datasets were created:
 - **452 dataset**: One interview per user (n={analysis_stats_452['n_interviews']} interviews)
 - **710 dataset**: All interviews (n={analysis_stats_710['n_interviews']} interviews, multiple per user)
 
-## 6. Statistics
+## 6. Statistical Analysis
 
-For the statistical analysis, we filtered the themes to include only those with a prevalence between 0.2 and 0.8. This ensures variation for statistical testing.
+For the statistical analysis, we filtered the themes to include only those with a prevalence between 20% and 80%. This ensures sufficient variation for statistical testing.
 
-**452 dataset**: {len(analysis_stats_452['valid_themes'])} themes met this criterion:
+**Filtering based on 710 dataset**: {len(analysis_stats_710['valid_themes'])} themes met this criterion.
 
-{formatted_valid_themes_452}
-
-**710 dataset**: {len(analysis_stats_710['valid_themes'])} themes met this criterion:
+These themes (Finnish names used in analysis):
 
 {formatted_valid_themes_710}
+
+These same themes (English translations for display):
+
+{formatted_valid_themes_710_en}
+
+**Note**: This same filtered theme list was used for both the 452 and 710 dataset analyses to ensure comparability.
 
 {stats_method}
 {translation_table}"""

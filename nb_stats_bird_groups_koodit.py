@@ -84,7 +84,13 @@ if PREVALENCE_FILTER_DATASET:
 # %% ═════════ 1. Load and Prepare Data ═════════
 
 # %%
-birds_raw = pd.read_csv('./inputs/bird-metadata-refined/bird_groups_finnish.csv')
+# Use English bird group names if translation enabled, otherwise Finnish
+if os.environ.get('ENABLE_TRANSLATION', '0') == '1':
+    birds_file = './inputs/bird-metadata-refined/bird_groups_english.csv'
+else:
+    birds_file = './inputs/bird-metadata-refined/bird_groups_finnish.csv'
+
+birds_raw = pd.read_csv(birds_file)
 birds_raw = birds_raw.set_index('rec_id').drop(columns=['lon', 'lat'])
 
 bird_group_cols = birds_raw.columns.tolist()
@@ -219,9 +225,8 @@ if STATS_MODE == 'random_effects':
     print(results_df[['Outcome', 'Predictor', 'Coefficient', 'Odds_Ratio', 'p_fdr']].head(20).to_string(index=False))
     
     # Configuration for plots
-    effect_threshold = 0.5
     heatmap_title = 'Effect of bird group on theme (|log-odds|)'
-    barplot_title = f'Strongest bird group-theme associations (|log-odds| ≥ {effect_threshold})'
+    barplot_title = 'Strongest bird group-theme associations (p ≤ 0.01)'
     heatmap_vmax = 1.5
 
 elif STATS_MODE == 'chisquared':
@@ -244,9 +249,8 @@ elif STATS_MODE == 'chisquared':
     print(results_df[['Outcome', 'Predictor', 'Chi2', 'Cramers_V', 'p_fdr', 'Difference']].head(20).to_string(index=False))
     
     # Configuration for plots
-    effect_threshold = 0.1
     heatmap_title = "Effect of bird group on theme (Cramér's V)"
-    barplot_title = f"Strongest bird group-theme associations (V ≥ {effect_threshold})"
+    barplot_title = "Strongest bird group-theme associations (p ≤ 0.01)"
     heatmap_vmax = 0.4
 
 # %% ═════════ 4. Heatmap ═════════
@@ -297,7 +301,6 @@ plot_top_associations_barplot(
     results_df,
     title=barplot_title,
     output_path=f'{output_dir}/04_top_associations.png',
-    min_effect=effect_threshold,
     figsize=STANDARD_FIGSIZE,
     footnote=f"{FOOTNOTE_METHOD} Significance: * q<0.05, ** q<0.01, *** q<0.001 (FDR)",
     stats_mode=STATS_MODE

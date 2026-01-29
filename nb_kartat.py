@@ -156,7 +156,12 @@ def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename,
     sm = plt.cm.ScalarMappable(cmap=pastel_prgn_cmap, norm=div_norm)
     sm._A = [] # Fake up the array of the scalar mappable
     cbar = fig.colorbar(sm, ax=ax, shrink=0.6)
-    cbar.set_label('Ratio')
+    cbar.set_label('Proportion')
+
+    # Add footnote explaining proportion calculation
+    fig.text(0.99, 0.01, 
+             'Proportion: Ratio of interviews within each grid cell where this theme was present.',
+             ha='right', va='bottom', fontsize=8, style='italic', color='gray')
 
     plt.savefig(output_filename, bbox_inches='tight', pad_inches=0.1, dpi=300)
     plt.show()

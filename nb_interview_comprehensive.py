@@ -245,7 +245,7 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
     # 2. has_species
     ax = axes[0, 1]
     has_species_counts = df_event['has_species'].value_counts().sort_index()
-    ax.bar(has_species_counts.index, has_species_counts.values, color=['lightcoral', 'skyblue'], edgecolor='black')
+    ax.bar(has_species_counts.index, has_species_counts.values, color=['#B19CD9', '#90EE90'], edgecolor='black')
     ax.set_xlabel('Has Species Recognized')
     ax.set_ylabel('Count')
     ax.set_title('Species Recognition\n(has_species)')
@@ -285,7 +285,7 @@ def plot_variable_distributions(df_event, df_full, df_species, user_profiles):
     ax = axes[2, 1]
     if 'urban' in df_event.columns:
         urban_counts = df_event['urban'].value_counts().sort_index()
-        ax.bar(urban_counts.index, urban_counts.values, color=['lightcoral', 'skyblue'], edgecolor='black')
+        ax.bar(urban_counts.index, urban_counts.values, color=['#B19CD9', '#90EE90'], edgecolor='black')
         ax.set_xlabel('Urban Habitat')
         ax.set_ylabel('Count')
         ax.set_title('Urban Habitat Presence\n(urban)')
@@ -480,11 +480,11 @@ def plot_odds_ratios(results):
     
     y = np.arange(len(r))
     ax.barh(y, r['OR'], xerr=[r['OR']-r['OR_Lower'], r['OR_Upper']-r['OR']], 
-            capsize=5, color='skyblue', edgecolor='black')
+            capsize=5, color='#90EE90', edgecolor='black')
     
     ax.set_yticks(y)
     ax.set_yticklabels(r.index)
-    ax.axvline(x=1, color='red', linestyle='--', linewidth=2, alpha=0.7)
+    ax.axvline(x=1, color='#B19CD9', linestyle='--', linewidth=2, alpha=0.7)
     ax.set_xlabel('Odds Ratio')
     ax.set_xscale('log')
     ax.set_title('Event-Level Predictors of Interview Participation\n(Logistic Regression with Cluster-Robust SEs)')
@@ -820,11 +820,11 @@ def run_user_participation_analysis(df_full, df_interviews, df_species, user_pro
         
         y = np.arange(len(r))
         ax.barh(y, r['OR'], xerr=[r['OR']-r['Lower'], r['Upper']-r['OR']], 
-                capsize=5, color='skyblue', edgecolor='black')
+                capsize=5, color='#90EE90', edgecolor='black')
         
         ax.set_yticks(y)
         ax.set_yticklabels(r.index)
-        ax.axvline(x=1, color='red', linestyle='--', linewidth=2, alpha=0.7)
+        ax.axvline(x=1, color='#B19CD9', linestyle='--', linewidth=2, alpha=0.7)
         ax.set_xlabel('Odds Ratio')
         ax.set_xscale('log')
         ax.set_title('User-Level Predictors of Interview Participation (Binary)')

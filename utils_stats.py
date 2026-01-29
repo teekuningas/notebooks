@@ -492,7 +492,7 @@ def plot_binary_predictor_distribution(predictor_binary, predictor_name,
     fig, ax = plt.subplots(figsize=figsize)
     counts = predictor_binary[predictor_name].value_counts().sort_index()
     bars = ax.bar([label_0, label_1], [counts[0], counts[1]], 
-                  color=['#e74c3c', '#2ecc71'], alpha=0.7, edgecolor='black', linewidth=1.5)
+                  color=['#B19CD9', '#90EE90'], alpha=0.7, edgecolor='black', linewidth=1.5)
     
     # Add counts on bars
     for bar in bars:
@@ -536,13 +536,13 @@ def plot_binary_predictor_effects(results_df, title, output_path,
     strong_effects = strong_effects.sort_values('Cramers_V', ascending=True)
     
     if len(strong_effects) == 0:
-        print(f"No associations with V >= {min_effect} found.")
+        print(f"No associations with p ≤ 0.01 found.")
         return
     
     fig, ax = plt.subplots(figsize=figsize)
     
     y_pos = np.arange(len(strong_effects))
-    colors = ['#2ecc71' if diff > 0 else '#e74c3c' 
+    colors = ['#90EE90' if diff > 0 else '#B19CD9' 
               for diff in strong_effects['Difference']]
     
     bars = ax.barh(y_pos, strong_effects['Cramers_V'], color=colors, alpha=0.7, 
@@ -605,9 +605,9 @@ def plot_binary_predictor_prevalence(results_df, label_pred, label_not_pred,
     without_pred = top_sig['P(Outcome|~Pred)'].values
     
     bars1 = ax.barh(y_pos - width/2, with_pred, width, label=label_pred, 
-                    color='#2ecc71', alpha=0.7, edgecolor='black', linewidth=0.5)
+                    color='#90EE90', alpha=0.7, edgecolor='black', linewidth=0.5)
     bars2 = ax.barh(y_pos + width/2, without_pred, width, label=label_not_pred,
-                    color='#e74c3c', alpha=0.7, edgecolor='black', linewidth=0.5)
+                    color='#B19CD9', alpha=0.7, edgecolor='black', linewidth=0.5)
     
     ax.set_yticks(y_pos)
     ax.set_yticklabels(top_sig['Outcome'])
@@ -633,28 +633,24 @@ def plot_top_associations_barplot(results_df, title, output_path,
         results_df: DataFrame from run_chi_square_tests() or run_mixed_effects_tests()
         title: Plot title
         output_path: Where to save figure
-        min_effect: Minimum effect size to include (V for chisquared, |coef| for random_effects)
+        min_effect: DEPRECATED - no longer used, kept for compatibility
         figsize: Figure dimensions
         footnote: Optional footnote text
         stats_mode: 'chisquared' or 'random_effects'
     """
-    # Choose filtering based on stats mode
-    if stats_mode == 'random_effects':
-        effect_col = 'Coefficient'
-        strong_effects = results_df[results_df[effect_col].abs() >= min_effect].copy()
-        # For random effects, also require at least nominal significance
-        # This prevents showing huge effect sizes that are just noise
-        strong_effects = strong_effects[strong_effects['p_value'] < 0.05]
-    else:  # chisquared
-        effect_col = 'Cramers_V'
-        strong_effects = results_df[results_df[effect_col] >= min_effect].copy()
-        # Chi-squared: V alone is sufficient (test is built-in)
-    
+    # Filter to only show associations with p ≤ 0.01 (for fitting on A4 paper)
+    strong_effects = results_df[results_df['p_value'] <= 0.01].copy()
     strong_effects = strong_effects.sort_values('p_value')
     
     if len(strong_effects) == 0:
-        print(f"No associations with effect >= {min_effect} found.")
+        print(f"No associations with p ≤ 0.01 found.")
         return
+    
+    # Choose effect column based on stats mode
+    if stats_mode == 'random_effects':
+        effect_col = 'Coefficient'
+    else:  # chisquared
+        effect_col = 'Cramers_V'
     
     # Dynamic font sizing based on number of items
     n_items = len(strong_effects)
