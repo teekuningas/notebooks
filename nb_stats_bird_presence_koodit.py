@@ -106,17 +106,25 @@ if STATS_MODE == 'random_effects':
 else:
     user_ids = None  # Not needed for chisquared mode
 
-# Calculate prevalence for filtering themes
+# Load prevalence filter dataset if specified
 if PREVALENCE_FILTER_DATASET:
-    # Use prevalence from specified dataset for filtering
     filter_themes = pd.read_csv(PREVALENCE_FILTER_DATASET, index_col=0)
     filter_themes.columns = filter_themes.columns.str.capitalize()
     filter_outcome = (filter_themes >= 0.5).astype(int)
-    prevalence = filter_outcome.mean()
-    print(f"Using prevalence from: {PREVALENCE_FILTER_DATASET}")
 else:
-    # Use prevalence from current dataset
-    prevalence = outcome_binary.mean()
+    filter_outcome = outcome_binary
+
+# Apply translation to both outcome and filter (if enabled)
+if os.environ.get('ENABLE_TRANSLATION', '0') == '1':
+    from utils_translate import translate_theme_names
+    outcome_binary = translate_theme_names(outcome_binary)
+    filter_outcome = translate_theme_names(filter_outcome)
+    print(f"✓ Translated {len(outcome_binary.columns)} theme names to English")
+
+# Calculate prevalence for filtering themes
+prevalence = filter_outcome.mean()
+if PREVALENCE_FILTER_DATASET:
+    print(f"Using prevalence from: {PREVALENCE_FILTER_DATASET}")
 
 themes_to_keep = prevalence[(prevalence >= MIN_THEME_PREVALENCE) & (prevalence <= MAX_THEME_PREVALENCE)].index
 print(f"Filtering themes: {len(outcome_binary.columns)} -> {len(themes_to_keep)} ({MIN_THEME_PREVALENCE*100:.0f}%-{MAX_THEME_PREVALENCE*100:.0f}% prevalence)")

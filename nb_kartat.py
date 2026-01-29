@@ -27,16 +27,28 @@ import os
 import colorsys
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
+import sys
 
 # --- Configuration ---
+# Parse command-line arguments for flexibility
+use_all_themes = '--all-themes' in sys.argv
+custom_output = None
+for i, arg in enumerate(sys.argv):
+    if arg == '--output' and i + 1 < len(sys.argv):
+        custom_output = sys.argv[i + 1]
+
 # Choose which data to map:
-# - 'koodit': Thematic codes
+# - 'koodit': Thematic codes (default)
 # - 'paikat': Location categories
-import os as _config_os
-data_type = _config_os.environ.get('MAP_TYPE', 'paikat')  # Default to 'paikat' (can be overridden with MAP_TYPE env var)
+data_type = os.environ.get('MAP_TYPE', 'paikat')  # Can be overridden with MAP_TYPE env var
 
 # Data paths
-codes_path = 'inputs/correlation-data/koodit_16x452.csv'
+if use_all_themes:
+    codes_path = './output/analyysi_koodit/7176421e/themes_98x710.csv'  # All 98 themes
+    data_type = 'koodit'
+else:
+    codes_path = 'inputs/correlation-data/koodit_16x452.csv'
+
 paikat_path = 'inputs/correlation-data/paikat_10x452.csv'
 metadata_path = 'inputs/bird-metadata/recs_since_June25.csv'
 
@@ -138,13 +150,13 @@ def plot_code_map(gdf, finland_shape, maakuntarajat, code_name, output_filename,
     grid_with_data.plot(column='ratio', cmap=pastel_prgn_cmap, norm=div_norm, linewidth=0.5, ax=ax, edgecolor='white')
 
     ax.set_axis_off()
-    plt.title(f"'{code_name}' yleisyys", fontsize=16, pad=10)
+    plt.title(f"'{code_name}' prevalence", fontsize=16, pad=10)
 
     # Add a colorbar
     sm = plt.cm.ScalarMappable(cmap=pastel_prgn_cmap, norm=div_norm)
     sm._A = [] # Fake up the array of the scalar mappable
     cbar = fig.colorbar(sm, ax=ax, shrink=0.6)
-    cbar.set_label('Osuus')
+    cbar.set_label('Ratio')
 
     plt.savefig(output_filename, bbox_inches='tight', pad_inches=0.1, dpi=300)
     plt.show()
@@ -160,11 +172,20 @@ try:
         data_label = 'paikat'
     else:
         codes = pd.read_csv(codes_path, index_col=0)
+        # For 98 themes dataset, convert to binary (>= 0.5)
+        if use_all_themes:
+            codes = (codes >= 0.5).astype(int)
         data_label = 'koodit'
+        
+    # Optionally translate theme names to English
+    if os.environ.get('ENABLE_TRANSLATION', '0') == '1' and data_type == 'koodit':
+        from utils_translate import translate_theme_names
+        codes = translate_theme_names(codes)
+        print(f"✓ Translated {len(codes.columns)} theme names to English")
     
     recs = pd.read_csv(metadata_path)
     code_names = list(codes.columns)
-    print(f"Loaded {len(code_names)} {data_label}: {', '.join(code_names)}")
+    print(f"Loaded {len(code_names)} {data_label}: {', '.join(code_names[:5])}{'...' if len(code_names) > 5 else ''}")
 except FileNotFoundError as e:
     print(f"Error loading data: {e}")
     print("Please make sure the data files are in the correct directory.")
@@ -181,7 +202,11 @@ if code_names:
     maakuntarajat = gpd.read_file('geo/maakuntarajat.json')
 
     # Determine output directory
-    if save_for_pdf:
+    if custom_output:
+        output_dir = custom_output
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Saving maps to custom directory: {output_dir}")
+    elif save_for_pdf:
         output_dir = 'output/figures_maps'
         os.makedirs(output_dir, exist_ok=True)
         print(f"Saving maps to figures directory: {output_dir}")

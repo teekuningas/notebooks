@@ -6,6 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import argparse
+import os
 
 # Match settings from utils_stats.py
 sns.set_style("whitegrid")
@@ -27,7 +29,7 @@ def get_significance_marker(p_fdr):
     else:
         return ''
 
-def create_comparison_plot(analysis_name, analysis_title, output_path):
+def create_comparison_plot(analysis_name, analysis_title, output_path, base_dir='./output/stats_comparison'):
     """
     Create side-by-side comparison plot for one analysis type.
     Shows -log10(p_value) for associations meeting criteria in either dataset.
@@ -41,10 +43,11 @@ def create_comparison_plot(analysis_name, analysis_title, output_path):
         analysis_name: Directory name (e.g., 'esa_koodit')
         analysis_title: Display title (e.g., 'ESA Habitats × Themes')
         output_path: Where to save PNG
+        base_dir: Base directory for input data (default: './output/stats_comparison')
     """
     # Load results - now using results.csv instead of mixed_effects_results.csv
-    results_452 = pd.read_csv(f'./output/stats_comparison/452/{analysis_name}/results.csv')
-    results_710 = pd.read_csv(f'./output/stats_comparison/710/{analysis_name}/results.csv')
+    results_452 = pd.read_csv(f'{base_dir}/452/{analysis_name}/results.csv')
+    results_710 = pd.read_csv(f'{base_dir}/710/{analysis_name}/results.csv')
     
     # Create keys
     results_452['key'] = results_452['Predictor'] + ' → ' + results_452['Outcome']
@@ -180,15 +183,24 @@ def create_comparison_plot(analysis_name, analysis_title, output_path):
 
 
 if __name__ == '__main__':
-    import os
+    parser = argparse.ArgumentParser(description='Create comparison plots for 452 vs 710 datasets')
+    parser.add_argument('--base-dir', type=str, default='./output/stats_comparison',
+                        help='Base directory for input data (default: ./output/stats_comparison)')
+    parser.add_argument('--output-dir', type=str, default=None,
+                        help='Output directory for plots (default: same as base-dir)')
+    args = parser.parse_args()
+    
     os.environ['MPLBACKEND'] = 'Agg'
     
-    output_dir = './output/stats_comparison'
+    base_dir = args.base_dir
+    output_dir = args.output_dir if args.output_dir else base_dir
     os.makedirs(output_dir, exist_ok=True)
     
     print("="*70)
     print("CREATING COMPARISON VISUALIZATIONS")
     print("="*70)
+    print(f"Input base directory: {base_dir}")
+    print(f"Output directory: {output_dir}")
     print()
     
     # Create one plot per analysis
@@ -197,25 +209,29 @@ if __name__ == '__main__':
     create_comparison_plot(
         'esa_koodit',
         'ESA Habitats × Themes',
-        f'{output_dir}/comparison_esa.png'
+        f'{output_dir}/comparison_esa.png',
+        base_dir=base_dir
     )
     
     create_comparison_plot(
         'bird_species_koodit',
         'Bird Species × Themes',
-        f'{output_dir}/comparison_bird_species.png'
+        f'{output_dir}/comparison_bird_species.png',
+        base_dir=base_dir
     )
     
     create_comparison_plot(
         'bird_presence_koodit',
         'Bird Presence × Themes',
-        f'{output_dir}/comparison_bird_presence.png'
+        f'{output_dir}/comparison_bird_presence.png',
+        base_dir=base_dir
     )
     
     create_comparison_plot(
         'bird_groups_koodit',
         'Bird Groups × Themes',
-        f'{output_dir}/comparison_bird_groups.png'
+        f'{output_dir}/comparison_bird_groups.png',
+        base_dir=base_dir
     )
     
     print()

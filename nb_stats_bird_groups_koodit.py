@@ -97,12 +97,25 @@ common_ids = birds_raw.index.intersection(koodit_raw.index)
 predictor_binary = birds_raw.loc[common_ids].astype(int)
 outcome_binary = (koodit_raw.loc[common_ids] >= 0.5).astype(int)
 
-# Calculate prevalence for filtering themes
+# Load prevalence filter dataset if specified
 if PREVALENCE_FILTER_DATASET:
-    # Use prevalence from specified dataset for filtering
     filter_themes = pd.read_csv(PREVALENCE_FILTER_DATASET, index_col=0)
     filter_themes.columns = filter_themes.columns.str.capitalize()
     filter_outcome = (filter_themes >= 0.5).astype(int)
+else:
+    filter_outcome = outcome_binary
+
+# Apply translation to both outcome and filter (if enabled)
+if os.environ.get('ENABLE_TRANSLATION', '0') == '1':
+    from utils_translate import translate_theme_names
+    outcome_binary = translate_theme_names(outcome_binary)
+    filter_outcome = translate_theme_names(filter_outcome)
+    print(f"✓ Translated {len(outcome_binary.columns)} theme names to English")
+
+# Calculate prevalence for filtering themes
+prevalence = filter_outcome.mean()
+if PREVALENCE_FILTER_DATASET:
+    print(f"Using prevalence from: {PREVALENCE_FILTER_DATASET}")
     prevalence = filter_outcome.mean()
     print(f"Using prevalence from: {PREVALENCE_FILTER_DATASET}")
 else:

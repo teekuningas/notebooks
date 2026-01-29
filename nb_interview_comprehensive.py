@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import os
+import sys
 
 from utils_interview import (
     get_habitat_data, 
@@ -29,7 +30,13 @@ INPUT_DIR = 'inputs/bird-metadata'
 LISTING_FILE = 'inputs/minio-listing/listing.txt'
 TRANSCRIPT_FILE = 'inputs/minio-listing/transcript-listing.txt'
 ESA_DIR = 'inputs/esa_worldcover'
-OUTPUT_DIR = 'output/interview_comprehensive'
+
+# Allow OUTPUT_DIR to be specified via command line argument
+if len(sys.argv) > 1:
+    OUTPUT_DIR = sys.argv[1]
+else:
+    OUTPUT_DIR = 'output/interview_comprehensive'
+
 CACHE_DIR = os.path.join(OUTPUT_DIR, 'cache')
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)

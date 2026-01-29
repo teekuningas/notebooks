@@ -2,6 +2,7 @@ import os
 import glob
 import pandas as pd
 import re
+import sys
 
 # Statistical mode configuration
 STATS_MODE = os.environ.get('STATS_MODE', 'random_effects')  # Default: random_effects
@@ -147,6 +148,17 @@ def parse_raw_codes(filepath):
     }
 
 def generate_report():
+    # Parse command-line arguments for custom output directory
+    custom_output = None
+    for i, arg in enumerate(sys.argv):
+        if arg == '--output' and i + 1 < len(sys.argv):
+            custom_output = sys.argv[i + 1]
+    
+    # Statistical mode configuration
+    stats_mode = os.environ.get('STATS_MODE', 'random_effects')  # Default: random_effects
+    if stats_mode not in ['random_effects', 'chisquared']:
+        raise ValueError(f"Invalid STATS_MODE: {stats_mode}. Must be 'random_effects' or 'chisquared'")
+    
     # 1. Consolidation Stats
     log_path = "output/consolidation/77db8e4e_seed11/merge_log.txt"
     list_path = "output/consolidation/77db8e4e_seed11/final_themes_list.txt"
@@ -164,21 +176,45 @@ def generate_report():
     if raw_stats and cons_stats['initial_themes'] > 0:
         artifacts_removed = raw_stats['n_kept_unique'] - cons_stats['initial_themes']
 
-    # 2. Analysis Stats
-    csv_path = "output/analyysi_koodit/7176421e/themes_98x710.csv"
-    analysis_stats = analyze_presence_csv(csv_path)
+    # 2. Analysis Stats - Load both datasets
+    csv_path_710 = "output/analyysi_koodit/7176421e/themes_98x710.csv"
+    csv_path_452 = "output/analyysi_koodit/88d43208/themes_98x452.csv"
+    
+    analysis_stats_710 = analyze_presence_csv(csv_path_710)
+    analysis_stats_452 = analyze_presence_csv(csv_path_452)
 
-    # Format lists with capitalization
+    # 3. Load theme translations if available
+    translation_table = ""
+    try:
+        from utils_translate import load_translation_dict
+        trans_dict = load_translation_dict()
+        # Filter to only include capitalized versions (the actual theme names)
+        theme_translations = [(fi, en) for fi, en in trans_dict.items() if fi[0].isupper()]
+        # Sort by Finnish name
+        theme_translations.sort(key=lambda x: x[0])
+        
+        translation_table = "\n## Theme Translations\n\n"
+        translation_table += "The following table shows all 98 themes with their Finnish and English names:\n\n"
+        translation_table += "| Finnish | English |\n"
+        translation_table += "| :--- | :--- |\n"
+        for fi, en in theme_translations:
+            translation_table += f"| {fi} | {en} |\n"
+        translation_table += "\n"
+    except Exception as e:
+        print(f"Note: Could not load translations: {e}")
+
+    # Format lists with capitalization (use 710 dataset as primary)
     formatted_all_themes = ", ".join([t.capitalize() for t in all_themes])
-    formatted_valid_themes = ", ".join([t.capitalize() for t in analysis_stats['valid_themes']])
+    formatted_valid_themes_710 = ", ".join([t.capitalize() for t in analysis_stats_710['valid_themes']])
+    formatted_valid_themes_452 = ", ".join([t.capitalize() for t in analysis_stats_452['valid_themes']])
     
     # Format top 10 table
     top_10_rows = ""
     for t in raw_stats['top_10']:
         top_10_rows += f"| {t['name']} | {t['count']} |\n"
 
-    # Formulate statistical method based on STATS_MODE
-    if STATS_MODE == 'chisquared':
+    # Formulate statistical method based on stats_mode
+    if stats_mode == 'chisquared':
         stats_method = """### Statistical method
 
 The analysis uses chi-squared tests with Cramér's V as the effect size measure. This provides a descriptive association between predictors and themes without accounting for user-level clustering:
@@ -209,11 +245,11 @@ This approach:
     report = f"""# Themes
 
 ## 1. Initial extraction
-We extracted themes and concepts from {analysis_stats['n_interviews']} interviews using a local LLM (llama3.3:70b). Each interview was processed with the instruction:
+We extracted themes and concepts from interviews using a local LLM (llama3.3:70b). Each interview was processed with the instruction:
 
 > "Olet laadullisen tutkimuksen avustaja. Tehtäväsi on tunnistaa tekstistä teemat ja käsitteet ja muodostaa niistä koodikirja. Perustele selkeästi jokaiselle koodille erikseen millä tavoin se ilmenee tekstissä. Vältä lyhenteitä. Vastaa suomeksi."
 
-This produced a total of {raw_stats['total_raw']} raw codes (approx. {raw_stats['total_raw']/analysis_stats['n_interviews']:.1f} per interview).
+This produced a total of {raw_stats['total_raw']} raw codes (approx. {raw_stats['total_raw']/analysis_stats_710['n_interviews']:.1f} per interview).
 
 The most frequent themes in this initial set were:
 
@@ -231,7 +267,7 @@ Before merging, we cleaned the raw data:
 This left {cons_stats['initial_themes']} unique themes for the consolidation phase.
 
 ## 3. Merging similar themes
-The themes were consolidated to remove duplicates and synonyms. This process was done without reference to the original interview text.
+The themes were consolidated to remove duplicates and synonyms using `nb_code_consolidation.py` (seed=11). This process was done without reference to the original interview text.
 
 In each iteration:
 
@@ -251,17 +287,35 @@ The consolidated themes were then checked against the original interview texts t
 
 > "Päätä esiintyykö seuraava teema tekstinäytteessä."
 
-## 5. Statistics
+## 5. Datasets
+
+Two datasets were created:
+
+- **452 dataset**: One interview per user (n={analysis_stats_452['n_interviews']} interviews)
+- **710 dataset**: All interviews (n={analysis_stats_710['n_interviews']} interviews, multiple per user)
+
+## 6. Statistics
+
 For the statistical analysis, we filtered the themes to include only those with a prevalence between 0.2 and 0.8. This ensures variation for statistical testing.
 
-{len(analysis_stats['valid_themes'])} themes met this criterion:
+**452 dataset**: {len(analysis_stats_452['valid_themes'])} themes met this criterion:
 
-{formatted_valid_themes}
+{formatted_valid_themes_452}
+
+**710 dataset**: {len(analysis_stats_710['valid_themes'])} themes met this criterion:
+
+{formatted_valid_themes_710}
 
 {stats_method}
-"""
+{translation_table}"""
 
-    output_file = "output/METHODOLOGY_SUMMARY.md"
+    # Determine output file path
+    if custom_output:
+        os.makedirs(custom_output, exist_ok=True)
+        output_file = os.path.join(custom_output, "METHODOLOGY_SUMMARY.md")
+    else:
+        output_file = "output/METHODOLOGY_SUMMARY.md"
+    
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(report)
     

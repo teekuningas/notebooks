@@ -1,0 +1,182 @@
+# Makefile.ossi - Publication materials generation
+# Uses 710 prevalence for filtering, outputs to ossi_all/
+# All outputs in English via ENABLE_TRANSLATION=1
+
+THEMES_452 = ./output/analyysi_koodit/88d43208/themes_98x452.csv
+THEMES_710 = ./output/analyysi_koodit/7176421e/themes_98x710.csv
+OUTPUT_BASE = ./output/ossi_all
+
+# Use 710 dataset prevalence for filtering both analyses
+PREVALENCE_FILTER = $(THEMES_710)
+
+# Enable English translation
+export ENABLE_TRANSLATION = 1
+
+# ==================== Run Analyses ====================
+
+ossi-run-452:
+	@echo "======================================"
+	@echo "Running 452 dataset analyses (chi-squared)..."
+	@echo "======================================"
+	MPLBACKEND=Agg STATS_MODE=chisquared \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_esa_koodit.py $(THEMES_452) $(OUTPUT_BASE)/452/esa_koodit
+	MPLBACKEND=Agg STATS_MODE=chisquared \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_bird_groups_koodit.py $(THEMES_452) $(OUTPUT_BASE)/452/bird_groups_koodit
+	MPLBACKEND=Agg STATS_MODE=chisquared \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_bird_presence_koodit.py $(THEMES_452) $(OUTPUT_BASE)/452/bird_presence_koodit
+	MPLBACKEND=Agg STATS_MODE=chisquared \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_bird_species_koodit.py $(THEMES_452) $(OUTPUT_BASE)/452/bird_species_koodit
+	@echo "✓ 452 dataset analyses complete"
+
+ossi-run-710:
+	@echo "======================================"
+	@echo "Running 710 dataset analyses (random effects)..."
+	@echo "======================================"
+	MPLBACKEND=Agg STATS_MODE=random_effects \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_esa_koodit.py $(THEMES_710) $(OUTPUT_BASE)/710/esa_koodit
+	MPLBACKEND=Agg STATS_MODE=random_effects \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_bird_groups_koodit.py $(THEMES_710) $(OUTPUT_BASE)/710/bird_groups_koodit
+	MPLBACKEND=Agg STATS_MODE=random_effects \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_bird_presence_koodit.py $(THEMES_710) $(OUTPUT_BASE)/710/bird_presence_koodit
+	MPLBACKEND=Agg STATS_MODE=random_effects \
+	  PREVALENCE_FILTER_DATASET=$(PREVALENCE_FILTER) \
+	  python3 nb_stats_bird_species_koodit.py $(THEMES_710) $(OUTPUT_BASE)/710/bird_species_koodit
+	@echo "✓ 710 dataset analyses complete"
+
+ossi-run-comparison:
+	@echo "======================================"
+	@echo "Running comparison analysis..."
+	@echo "======================================"
+	@echo "Creating comparison plots..."
+	MPLBACKEND=Agg python3 nb_create_comparison_plots.py \
+	  --base-dir $(OUTPUT_BASE) --output-dir $(OUTPUT_BASE)/comparison
+	@echo "✓ Comparison analysis complete"
+
+ossi-run-maps:
+	@echo "======================================"
+	@echo "Generating theme maps..."
+	@echo "======================================"
+	MPLBACKEND=Agg python3 nb_kartat.py --all-themes --output $(OUTPUT_BASE)/maps
+	@echo "✓ Theme maps complete"
+
+ossi-run-interview:
+	@echo "======================================"
+	@echo "Running interview analysis..."
+	@echo "======================================"
+	MPLBACKEND=Agg python3 nb_interview_comprehensive.py $(OUTPUT_BASE)/interview
+	@echo "✓ Interview analysis complete"
+
+ossi-run-methodology:
+	@echo "======================================"
+	@echo "Generating methodology summary..."
+	@echo "======================================"
+	python3 nb_methodology_summary.py --output $(OUTPUT_BASE)/methodology
+	@echo "✓ Methodology summary complete"
+
+# ==================== Generate PDFs ====================
+
+ossi-pdf-452:
+	@echo "Generating 452 dataset PDFs..."
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/esa_themes_452.pdf" \
+	    "ESA Habitats × Themes (452)" "$(OUTPUT_BASE)/452/esa_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/bird_groups_themes_452.pdf" \
+	    "Bird Groups × Themes (452)" "$(OUTPUT_BASE)/452/bird_groups_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/bird_presence_themes_452.pdf" \
+	    "Bird Presence × Themes (452)" "$(OUTPUT_BASE)/452/bird_presence_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/bird_species_themes_452.pdf" \
+	    "Bird Species × Themes (452)" "$(OUTPUT_BASE)/452/bird_species_koodit" 50
+	@echo "✓ 452 dataset PDFs complete"
+
+ossi-pdf-710:
+	@echo "Generating 710 dataset PDFs..."
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/esa_themes_710.pdf" \
+	    "ESA Habitats × Themes (710)" "$(OUTPUT_BASE)/710/esa_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/bird_groups_themes_710.pdf" \
+	    "Bird Groups × Themes (710)" "$(OUTPUT_BASE)/710/bird_groups_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/bird_presence_themes_710.pdf" \
+	    "Bird Presence × Themes (710)" "$(OUTPUT_BASE)/710/bird_presence_koodit" 50
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/bird_species_themes_710.pdf" \
+	    "Bird Species × Themes (710)" "$(OUTPUT_BASE)/710/bird_species_koodit" 50
+	@echo "✓ 710 dataset PDFs complete"
+
+ossi-pdf-comparison:
+	@echo "Generating comparison PDF..."
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/stats_comparison.pdf" \
+	    "452 vs 710 Comparison" "$(OUTPUT_BASE)/comparison" 50
+	@echo "✓ Comparison PDF complete"
+
+ossi-pdf-maps:
+	@echo "Generating maps PDF..."
+	nix shell nixpkgs/25.05#imagemagick --command \
+	  ./scripts/create_pdf.sh "$(OUTPUT_BASE)/theme_maps.pdf" \
+	    "Theme Maps" "$(OUTPUT_BASE)/maps" 50
+	@echo "✓ Maps PDF complete"
+
+ossi-pdf-interview:
+	@echo "Generating interview analysis PDF..."
+	cd $(OUTPUT_BASE)/interview && \
+	  nix shell nixpkgs/25.05#pandoc nixpkgs/25.05#texlive.combined.scheme-small --command \
+	    pandoc interview_analysis_report.md -o ../interview_analysis.pdf \
+	      -V geometry:margin=1.5cm \
+	      -V fontsize=10pt \
+	      --pdf-engine=pdflatex
+	@echo "✓ Interview analysis PDF complete"
+
+ossi-pdf-methodology:
+	@echo "Generating methodology summary PDF..."
+	nix shell nixpkgs/25.05#pandoc nixpkgs/25.05#texlive.combined.scheme-small --command \
+	  pandoc $(OUTPUT_BASE)/methodology/METHODOLOGY_SUMMARY.md \
+	    -o $(OUTPUT_BASE)/methodology_summary.pdf
+	@echo "✓ Methodology summary PDF complete"
+
+ossi-pdf-all: ossi-pdf-452 ossi-pdf-710 ossi-pdf-comparison \
+              ossi-pdf-maps ossi-pdf-interview ossi-pdf-methodology
+	@echo ""
+	@echo "======================================"
+	@echo "✓ All 12 PDFs generated in $(OUTPUT_BASE)/"
+	@echo "======================================"
+	@ls -lh $(OUTPUT_BASE)/*.pdf
+
+# ==================== Full Pipeline ====================
+
+ossi-run-all: ossi-run-452 ossi-run-710 ossi-run-comparison \
+              ossi-run-maps ossi-run-interview ossi-run-methodology
+	@echo ""
+	@echo "======================================"
+	@echo "✓ All analyses complete!"
+	@echo "======================================"
+
+ossi-all: ossi-run-all ossi-pdf-all
+	@echo ""
+	@echo "======================================"
+	@echo "✓✓✓ Publication materials ready! ✓✓✓"
+	@echo "======================================"
+	@echo "Output directory: $(OUTPUT_BASE)/"
+	@echo ""
+
+# ==================== Cleanup ====================
+
+ossi-clean:
+	@echo "Cleaning ossi_all output directory..."
+	rm -rf $(OUTPUT_BASE)
+	@echo "✓ Cleaned"
+
+.PHONY: ossi-run-452 ossi-run-710 ossi-run-comparison ossi-run-maps ossi-run-interview ossi-run-methodology \
+        ossi-pdf-452 ossi-pdf-710 ossi-pdf-comparison ossi-pdf-maps ossi-pdf-interview ossi-pdf-methodology \
+        ossi-pdf-all ossi-run-all ossi-all ossi-clean
